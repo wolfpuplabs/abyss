@@ -21,7 +21,7 @@
         font-family: monospace;
         color: #fff;
       }
-      #start-btn {
+      .btn {
         background: #440000;
         color: white;
         border: 2px solid #ff0000;
@@ -33,15 +33,31 @@
         box-shadow: 0 0 15px rgba(255, 0, 0, 0.5);
         transition: 0.3s;
       }
-      #start-btn:hover { background: #ff0000; color: #000; }
+      .btn:hover { background: #ff0000; color: #000; }
 
-      /* Layar Sudden Death (Efek Darah) */
+      /* Timer In-Game */
+      #hud-timer {
+        display: none;
+        position: absolute;
+        top: 20px; left: 50%;
+        transform: translateX(-50%);
+        color: #fff;
+        font-family: monospace;
+        font-size: 24px;
+        z-index: 9998;
+        text-shadow: 2px 2px 5px #000, 0 0 10px #ff0000;
+      }
+
+      /* Layar Sudden Death */
       #death-overlay {
         display: none;
         position: absolute;
         top: 0; left: 0; width: 100%; height: 100%;
         z-index: 9999;
-        pointer-events: none;
+        /* pointer-events dihilangkan agar tombol bisa diklik */
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
         background: 
           radial-gradient(circle at 30% 40%, #600000 0%, transparent 15%),
           radial-gradient(circle at 70% 60%, #800000 0%, transparent 20%),
@@ -57,16 +73,21 @@
       }
 
       #death-text {
-        position: absolute;
-        top: 50%; width: 100%;
-        transform: translateY(-50%);
-        text-align: center;
         color: #ff0000;
         font-family: 'Courier New', Courier, monospace;
-        font-size: 12vw;
+        font-size: 10vw;
         font-weight: bold;
         margin: 0;
         text-shadow: 2px 2px 10px #000, 0 0 30px #880000;
+      }
+
+      #final-time {
+        color: #fff;
+        font-family: monospace;
+        font-size: 2vw;
+        margin-top: 10px;
+        margin-bottom: 40px;
+        text-shadow: 2px 2px 5px #000;
       }
     </style>
 
@@ -98,7 +119,7 @@
         whiteNoise.start(); 
       }
 
-      // Suara Lengkingan (Screech) yang volumenya tergantung jarak
+      // Suara Lengkingan
       function playScreech(volumeMult) {
         if (audioCtx.state !== 'running') return;
         const osc = audioCtx.createOscillator();
@@ -121,7 +142,7 @@
         osc.stop(audioCtx.currentTime + 1);
       }
 
-      // Suara Kematian (Death Crunch/Bass Drop)
+      // Suara Kematian
       function playDeathSound() {
         if (audioCtx.state !== 'running') return;
         const osc = audioCtx.createOscillator();
@@ -143,6 +164,8 @@
 
       // -- SISTEM KONTROL & GAMEPLAY -- //
       window.isGameOver = false;
+      window.gameStartTime = 0;
+      window.timerInterval = null;
 
       AFRAME.registerComponent('tap-to-move', {
         init: function () {
@@ -213,7 +236,7 @@
         init: function () {
           this.cameraRig = document.querySelector('#cameraRig');
           this.active = false;
-          this.speed = 5.0; // Kecepatan dipercepat agar lebih menantang
+          this.speed = 5.0; 
           this.screechTimer = 0;
           this.threatPos = new THREE.Vector3();
         },
@@ -221,7 +244,18 @@
           this.active = true;
           window.isGameOver = false;
           
-          // Spawn musuh lebih dekat (radius 20 meter dari pemain)
+          // Memulai Timer
+          window.gameStartTime = Date.now();
+          document.getElementById('hud-timer').style.display = 'block';
+          if(window.timerInterval) clearInterval(window.timerInterval);
+          window.timerInterval = setInterval(() => {
+            if(!window.isGameOver) {
+              let elapsed = (Date.now() - window.gameStartTime) / 1000;
+              document.getElementById('timer-val').innerText = elapsed.toFixed(1);
+            }
+          }, 100);
+
+          // Spawn musuh
           let rigPos = this.cameraRig.object3D.position;
           let angle = Math.random() * Math.PI * 2;
           let dist = 20;
@@ -238,13 +272,17 @@
         triggerDeath: function () {
           window.isGameOver = true;
           this.active = false;
+          clearInterval(window.timerInterval);
           
-          // Posisikan hantu persis di depan mata kamera saat mati
           let rigPos = this.cameraRig.object3D.position;
           this.el.object3D.position.set(rigPos.x, rigPos.y + 1.5, rigPos.z - 1);
           
           this.cameraRig.removeAttribute('animation');
-          document.getElementById('death-overlay').style.display = 'block';
+          
+          // Tampilkan layer kematian
+          let elapsed = (Date.now() - window.gameStartTime) / 1000;
+          document.getElementById('final-time-val').innerText = elapsed.toFixed(1);
+          document.getElementById('death-overlay').style.display = 'flex';
           
           playDeathSound();
         },
@@ -254,7 +292,6 @@
           let rigPos = this.cameraRig.object3D.position;
           let distToPlayer = this.threatPos.distanceTo(rigPos);
 
-          // Radius deteksi tabrakan diperbesar menjadi 3.5 meter
           if (distToPlayer < 3.5) {
             this.triggerDeath();
             return;
@@ -272,8 +309,6 @@
           if (this.screechTimer <= 0) {
             let vol = Math.max(0, 1.0 - (distToPlayer / 30));
             playScreech(vol);
-            
-            // Semakin dekat, jeritannya semakin sering (interval antara 1-2 detik)
             this.screechTimer = 1000 + (Math.random() * 1000);
           }
         }
@@ -283,25 +318,48 @@
       document.addEventListener('DOMContentLoaded', () => {
         const startBtn = document.getElementById('start-btn');
         const startMenu = document.getElementById('start-menu');
+        const restartBtn = document.getElementById('restart-btn');
+        let bgmStarted = false;
 
-        startBtn.addEventListener('click', () => {
+        function initAudioAndStart() {
           if (audioCtx.state === 'suspended') audioCtx.resume();
           
-          const buffer = audioCtx.createBuffer(1, 1, 22050);
-          const source = audioCtx.createBufferSource();
-          source.buffer = buffer; source.connect(audioCtx.destination);
-          if (source.start) source.start(0); else source.noteOn(0);
-
-          playBGM();
-          startMenu.style.display = 'none';
+          if(!bgmStarted) {
+            const buffer = audioCtx.createBuffer(1, 1, 22050);
+            const source = audioCtx.createBufferSource();
+            source.buffer = buffer; source.connect(audioCtx.destination);
+            if (source.start) source.start(0); else source.noteOn(0);
+            playBGM();
+            bgmStarted = true;
+          }
           
-          // Bug Fix: Kita panggil component tepat saat Timeout berjalan untuk memastikan A-Frame sudah selesai render
+          // Mulai sistem musuh & timer
           setTimeout(() => {
             const threatEntity = document.querySelector('#threatEntity');
             if (threatEntity && threatEntity.components['threat-system']) {
               threatEntity.components['threat-system'].startGame();
             }
-          }, 2000); // Waktu jeda dipersingkat menjadi 2 detik saja
+          }, 1000);
+        }
+
+        // Tombol Start Menu
+        startBtn.addEventListener('click', () => {
+          startMenu.style.display = 'none';
+          initAudioAndStart();
+        });
+
+        // Tombol Play Again
+        restartBtn.addEventListener('click', () => {
+          document.getElementById('death-overlay').style.display = 'none';
+          document.getElementById('timer-val').innerText = "0.0";
+          
+          // Reset posisi player ke origin
+          const camRig = document.querySelector('#cameraRig');
+          camRig.removeAttribute('animation');
+          camRig.object3D.position.set(0, 0, 0);
+          
+          // Jeda sebentar sebelum musuh spawn lagi
+          initAudioAndStart();
         });
       });
     </script>
@@ -312,12 +370,17 @@
     <div id="start-menu">
       <h1 style="color: #ff0000; text-shadow: 0 0 10px red;">SURVIVE THE LIMBO</h1>
       <p>Tap the floor to run. Move AWAY from the screeching sound.</p>
-      <button id="start-btn">ENTER SURVIVAL</button>
+      <button class="btn" id="start-btn">ENTER SURVIVAL</button>
     </div>
+
+    <!-- HUD Timer saat Game Berjalan -->
+    <div id="hud-timer">Time: <span id="timer-val">0.0</span>s</div>
 
     <!-- UI Overlay Darah Kematian -->
     <div id="death-overlay">
       <h1 id="death-text">YOU DIED</h1>
+      <p id="final-time">You survived for: <span id="final-time-val" style="color: #ff0000; font-weight: bold;">0.0</span>s</p>
+      <button class="btn" id="restart-btn">PLAY AGAIN</button>
     </div>
 
     <a-scene fog="type: exponential; color: #071313; density: 0.065" background="color: #071313">
@@ -337,7 +400,6 @@
 
       <!-- ENTITAS MUSUH PENGEJAR -->
       <a-entity id="threatEntity" visible="false" threat-system>
-        <!-- Inti merah berdenyut -->
         <a-sphere radius="0.4" position="0 1.5 0" color="#ff0000" material="shader: flat; transparent: true; opacity: 0.8" 
                   animation="property: scale; to: 1.5 1.5 1.5; dir: alternate; dur: 300; loop: true"></a-sphere>
         <a-sphere radius="1.2" position="0 1.2 0" color="#000000" material="shader: flat; transparent: true; opacity: 0.95"></a-sphere>
