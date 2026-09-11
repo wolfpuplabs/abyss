@@ -6,7 +6,7 @@
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     
     <style>
-      /* UI Toggle Icon - Tanpa Teks */
+      /* UI Toggle Icon */
       #ui-container {
         position: absolute;
         bottom: 30px;
@@ -26,6 +26,7 @@
         justify-content: center;
         transition: all 0.3s ease;
       }
+      /* Default state sekarang aktif (merah) */
       #scareToggle.active {
         border-color: #ff0000;
         box-shadow: 0 0 20px rgba(255, 0, 0, 0.6);
@@ -99,18 +100,27 @@
         }
       });
 
-      // 4. Sistem Jump Scare dengan Gambar
+      // 4. Sistem Jump Scare (Default ON)
       document.addEventListener('DOMContentLoaded', () => {
         const toggleBtn = document.getElementById('scareToggle');
         const scareFace = document.getElementById('scareFace');
-        let scareActive = false;
+        
+        let scareActive = true; // Default nyala
         let scareTimer = null;
         
         const AudioContext = window.AudioContext || window.webkitAudioContext;
         const audioCtx = new AudioContext();
 
+        // Mengakali browser autoplay policy: Aktifkan audio context di klik pertama user
+        document.body.addEventListener('click', () => {
+          if (audioCtx.state === 'suspended') {
+            audioCtx.resume();
+          }
+        }, { once: true });
+
         function playScareSound() {
-          if (audioCtx.state === 'suspended') audioCtx.resume();
+          if (audioCtx.state === 'suspended') return; // Lewati jika user belum interaksi sama sekali
+          
           const osc = audioCtx.createOscillator();
           const gainNode = audioCtx.createGain();
           osc.type = 'sawtooth';
@@ -132,14 +142,17 @@
           setTimeout(() => {
             scareFace.setAttribute('visible', 'false');
             scheduleNextScare();
-          }, 300); // Tampil sedikit lebih lama agar gambar hantu terlihat jelas
+          }, 350); 
         }
 
         function scheduleNextScare() {
           if (!scareActive) return;
-          const nextScareTime = Math.random() * 17000 + 8000;
+          const nextScareTime = Math.random() * 17000 + 8000; // Antara 8 - 25 detik
           scareTimer = setTimeout(triggerScare, nextScareTime);
         }
+
+        // Mulai timer langsung saat web dimuat (karena default ON)
+        scheduleNextScare();
 
         toggleBtn.addEventListener('click', () => {
           scareActive = !scareActive;
@@ -147,11 +160,11 @@
           if (scareActive) {
             if (audioCtx.state === 'suspended') audioCtx.resume();
             toggleBtn.classList.add('active');
-            toggleBtn.innerHTML = '👁️'; // Ikon aktif (mata terbuka)
+            toggleBtn.innerHTML = '👁️'; 
             scheduleNextScare();
           } else {
             toggleBtn.classList.remove('active');
-            toggleBtn.innerHTML = '🔕'; // Ikon nonaktif (lonceng mati)
+            toggleBtn.innerHTML = '🔕'; 
             clearTimeout(scareTimer);
             scareFace.setAttribute('visible', 'false');
           }
@@ -161,15 +174,14 @@
   </head>
   <body>
     
-    <!-- UI Toggle Icon -->
+    <!-- UI Toggle Icon - Default diset dengan class "active" dan ikon Mata Terbuka -->
     <div id="ui-container">
-      <!-- Default icon saat dimuat adalah mute/off -->
-      <button id="scareToggle" title="Toggle Scare">🔕</button>
+      <button id="scareToggle" class="active" title="Toggle Scare">👁️</button>
     </div>
 
     <a-scene fog="type: exponential; color: #0a0a0a; density: 0.08" background="color: #0a0a0a">
 
-      <!-- Preload Asset Gambar Hantu -->
+      <!-- Preload Asset -->
       <a-assets>
         <img id="ghostImg" src="image_2.png">
       </a-assets>
@@ -185,25 +197,28 @@
                     material="color: #ffffff; shader: flat; opacity: 0.5">
           </a-entity>
           
-          <!-- Entitas Jump Scare (Gambar 2D Transparan) -->
-          <!-- Posisi z dibuat -0.8 agar terasa sangat dekat di depan wajah -->
+          <!-- Entitas Jump Scare -->
+          <!-- Modifikasi Material: color #b3b3b3 memberikan tint keabu-abuan agar warnanya redup menyatu dengan fog, opacity 0.75 membuatnya sedikit semi-transparan -->
           <a-image id="scareFace" 
                    src="#ghostImg" 
                    position="0 -0.2 -0.8" 
                    width="1.2" 
                    height="2" 
-                   transparent="true" 
-                   opacity="0.85" 
+                   material="shader: flat; transparent: true; opacity: 0.75; color: #b3b3b3"
                    visible="false">
           </a-image>
 
         </a-camera>
       </a-entity>
 
+      <!-- Lighting -->
       <a-light type="ambient" color="#111"></a-light>
       <a-light type="point" color="#ffffff" intensity="0.6" position="0 15 0" distance="50"></a-light>
 
+      <!-- Lantai -->
       <a-plane class="walkable" tap-to-move endless-ground rotation="-90 0 0" width="200" height="200" color="#050505" material="shader: flat"></a-plane>
+      
+      <!-- Hutan Endless -->
       <a-entity endless-forest="treeCount: 250; radius: 50"></a-entity>
 
     </a-scene>
