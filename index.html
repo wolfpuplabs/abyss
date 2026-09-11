@@ -2,11 +2,10 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>Endless VR Limbo - Ghost Scare</title>
+    <title>Endless VR Limbo - Shadow Dash Scare</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     
     <style>
-      /* UI Toggle Icon */
       #ui-container {
         position: absolute;
         bottom: 30px;
@@ -26,7 +25,6 @@
         justify-content: center;
         transition: all 0.3s ease;
       }
-      /* Default state sekarang aktif (merah) */
       #scareToggle.active {
         border-color: #ff0000;
         box-shadow: 0 0 20px rgba(255, 0, 0, 0.6);
@@ -35,6 +33,27 @@
     </style>
 
     <script>
+      // INISIALISASI AUDIO & UNLOCKER UNTUK MOBILE
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      const audioCtx = new AudioContext();
+
+      function unlockAudio() {
+        if (audioCtx.state === 'suspended') {
+          audioCtx.resume();
+        }
+        const buffer = audioCtx.createBuffer(1, 1, 22050);
+        const source = audioCtx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(audioCtx.destination);
+        if (source.start) source.start(0);
+        else source.noteOn(0);
+
+        window.removeEventListener('touchstart', unlockAudio);
+        window.removeEventListener('click', unlockAudio);
+      }
+      window.addEventListener('touchstart', unlockAudio, false);
+      window.addEventListener('click', unlockAudio, false);
+
       // 1. Sistem Tap to Move
       AFRAME.registerComponent('tap-to-move', {
         init: function () {
@@ -100,65 +119,89 @@
         }
       });
 
-      // 4. Sistem Jump Scare (Default ON)
+      // 4. Sistem Jump Scare (Bayangan Melesat & Partikel)
       document.addEventListener('DOMContentLoaded', () => {
         const toggleBtn = document.getElementById('scareToggle');
-        const scareFace = document.getElementById('scareFace');
+        const scareEntity = document.getElementById('scareEntity');
         
-        let scareActive = true; // Default nyala
+        let scareActive = true; 
         let scareTimer = null;
-        
-        const AudioContext = window.AudioContext || window.webkitAudioContext;
-        const audioCtx = new AudioContext();
 
-        // Mengakali browser autoplay policy: Aktifkan audio context di klik pertama user
-        document.body.addEventListener('click', () => {
-          if (audioCtx.state === 'suspended') {
-            audioCtx.resume();
-          }
-        }, { once: true });
-
-        function playScareSound() {
-          if (audioCtx.state === 'suspended') return; // Lewati jika user belum interaksi sama sekali
+        function playShadowDashSound() {
+          if (audioCtx.state !== 'running') return; 
           
-          const osc = audioCtx.createOscillator();
+          const osc1 = audioCtx.createOscillator();
+          const osc2 = audioCtx.createOscillator();
           const gainNode = audioCtx.createGain();
-          osc.type = 'sawtooth';
-          osc.frequency.setValueAtTime(150, audioCtx.currentTime);
-          osc.frequency.exponentialRampToValueAtTime(1200, audioCtx.currentTime + 0.1);
-          gainNode.gain.setValueAtTime(2, audioCtx.currentTime);
-          gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
-          osc.connect(gainNode);
+          
+          // Suara whoosh bass (frekuensi rendah)
+          osc1.type = 'sine';
+          osc1.frequency.setValueAtTime(80, audioCtx.currentTime);
+          osc1.frequency.exponentialRampToValueAtTime(10, audioCtx.currentTime + 0.4);
+          
+          // Suara distorsi/angin
+          osc2.type = 'sawtooth';
+          osc2.frequency.setValueAtTime(150, audioCtx.currentTime);
+          osc2.frequency.exponentialRampToValueAtTime(20, audioCtx.currentTime + 0.4);
+
+          // Volume membesar saat bayangan mendekat (0.2s), lalu hilang saat asap mengepul
+          gainNode.gain.setValueAtTime(0.01, audioCtx.currentTime);
+          gainNode.gain.exponentialRampToValueAtTime(3, audioCtx.currentTime + 0.2);
+          gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.6);
+          
+          osc1.connect(gainNode);
+          osc2.connect(gainNode);
           gainNode.connect(audioCtx.destination);
-          osc.start();
-          osc.stop(audioCtx.currentTime + 0.5);
+          
+          osc1.start(); osc2.start();
+          osc1.stop(audioCtx.currentTime + 0.7); osc2.stop(audioCtx.currentTime + 0.7);
         }
 
         function triggerScare() {
           if (!scareActive) return;
-          scareFace.setAttribute('visible', 'true');
-          playScareSound();
           
+          // Reset posisi di kejauhan (-15) dan ukuran normal (1 1 1)
+          scareEntity.setAttribute('position', '0 0 -15');
+          scareEntity.setAttribute('scale', '1 1 1');
+          scareEntity.setAttribute('visible', 'true');
+          
+          // Animasi melesat mendekat ke kamera
+          scareEntity.setAttribute('animation__dash', {
+            property: 'position',
+            to: '0 0 -0.5',
+            dur: 250,
+            easing: 'easeInCubic'
+          });
+
+          // Animasi meledak menjadi asap (skala membesar saat mengenai wajah)
+          scareEntity.setAttribute('animation__smoke', {
+            property: 'scale',
+            to: '15 15 15',
+            dur: 400,
+            delay: 200, // Mulai meledak saat hampir menabrak wajah
+            easing: 'easeOutQuad'
+          });
+
+          playShadowDashSound();
+          
+          // Sembunyikan setelah efek selesai dan jadwalkan scare berikutnya
           setTimeout(() => {
-            scareFace.setAttribute('visible', 'false');
+            scareEntity.setAttribute('visible', 'false');
             scheduleNextScare();
-          }, 350); 
+          }, 650); 
         }
 
         function scheduleNextScare() {
           if (!scareActive) return;
-          const nextScareTime = Math.random() * 17000 + 8000; // Antara 8 - 25 detik
+          const nextScareTime = Math.random() * 15000 + 8000; 
           scareTimer = setTimeout(triggerScare, nextScareTime);
         }
 
-        // Mulai timer langsung saat web dimuat (karena default ON)
         scheduleNextScare();
 
         toggleBtn.addEventListener('click', () => {
           scareActive = !scareActive;
-          
           if (scareActive) {
-            if (audioCtx.state === 'suspended') audioCtx.resume();
             toggleBtn.classList.add('active');
             toggleBtn.innerHTML = '👁️'; 
             scheduleNextScare();
@@ -166,7 +209,7 @@
             toggleBtn.classList.remove('active');
             toggleBtn.innerHTML = '🔕'; 
             clearTimeout(scareTimer);
-            scareFace.setAttribute('visible', 'false');
+            scareEntity.setAttribute('visible', 'false');
           }
         });
       });
@@ -174,17 +217,12 @@
   </head>
   <body>
     
-    <!-- UI Toggle Icon - Default diset dengan class "active" dan ikon Mata Terbuka -->
     <div id="ui-container">
       <button id="scareToggle" class="active" title="Toggle Scare">👁️</button>
     </div>
 
+    <!-- Warna gelap Limbo (#0a0a0a) -->
     <a-scene fog="type: exponential; color: #0a0a0a; density: 0.08" background="color: #0a0a0a">
-
-      <!-- Preload Asset -->
-      <a-assets>
-        <img id="ghostImg" src="image_2.png">
-      </a-assets>
 
       <a-entity id="cameraRig" position="0 0 0">
         <a-camera position="0 1.6 0" look-controls="pointerLockEnabled: false">
@@ -197,16 +235,15 @@
                     material="color: #ffffff; shader: flat; opacity: 0.5">
           </a-entity>
           
-          <!-- Entitas Jump Scare -->
-          <!-- Modifikasi Material: color #b3b3b3 memberikan tint keabu-abuan agar warnanya redup menyatu dengan fog, opacity 0.75 membuatnya sedikit semi-transparan -->
-          <a-image id="scareFace" 
-                   src="#ghostImg" 
-                   position="0 -0.2 -0.8" 
-                   width="1.2" 
-                   height="2" 
-                   material="shader: flat; transparent: true; opacity: 0.75; color: #b3b3b3"
-                   visible="false">
-          </a-image>
+          <!-- ENTITAS BAYANGAN & PARTIKEL ASAP -->
+          <a-entity id="scareEntity" visible="false" position="0 0 -15">
+            <!-- Inti bayangan hitam pekat -->
+            <a-sphere radius="0.5" color="#000000" material="shader: flat; transparent: true; opacity: 0.95" scale="1 1.5 1"></a-sphere>
+            <!-- Lapisan asap 1 (abu-abu gelap) -->
+            <a-sphere radius="0.8" color="#111111" material="shader: flat; transparent: true; opacity: 0.6" position="0.2 0.2 0.2"></a-sphere>
+            <!-- Lapisan asap 2 (tepian transparan) -->
+            <a-sphere radius="1.2" color="#1a1a1a" material="shader: flat; transparent: true; opacity: 0.3" position="-0.2 -0.1 0.1"></a-sphere>
+          </a-entity>
 
         </a-camera>
       </a-entity>
