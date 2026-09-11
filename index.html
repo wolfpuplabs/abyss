@@ -42,7 +42,6 @@
         top: 0; left: 0; width: 100%; height: 100%;
         z-index: 9999;
         pointer-events: none;
-        /* Kombinasi radial gradient untuk efek bercak darah dan vignette gelap */
         background: 
           radial-gradient(circle at 30% 40%, #600000 0%, transparent 15%),
           radial-gradient(circle at 70% 60%, #800000 0%, transparent 20%),
@@ -64,18 +63,16 @@
         text-align: center;
         color: #ff0000;
         font-family: 'Courier New', Courier, monospace;
-        font-size: 10vw;
+        font-size: 12vw;
         font-weight: bold;
         margin: 0;
-        text-shadow: 2px 2px 10px #000, 0 0 20px #880000;
+        text-shadow: 2px 2px 10px #000, 0 0 30px #880000;
       }
     </style>
 
     <script>
       const AudioContext = window.AudioContext || window.webkitAudioContext;
       const audioCtx = new AudioContext();
-      
-      // -- SISTEM AUDIO SINTESIS -- //
       
       // BGM Ambience
       function playBGM() {
@@ -108,13 +105,11 @@
         const gain = audioCtx.createGain();
         
         osc.type = 'sawtooth';
-        // Nada melengking sumbang
         osc.frequency.setValueAtTime(800, audioCtx.currentTime);
         osc.frequency.exponentialRampToValueAtTime(2500, audioCtx.currentTime + 0.3);
         osc.frequency.exponentialRampToValueAtTime(1000, audioCtx.currentTime + 0.6);
         
-        // Volume diatur oleh seberapa dekat musuh
-        let finalVol = Math.max(0.01, volumeMult * 3); 
+        let finalVol = Math.max(0.01, volumeMult * 4); 
         
         gain.gain.setValueAtTime(0, audioCtx.currentTime);
         gain.gain.linearRampToValueAtTime(finalVol, audioCtx.currentTime + 0.1);
@@ -147,26 +142,25 @@
 
 
       // -- SISTEM KONTROL & GAMEPLAY -- //
-      
-      // Tap to Move (Sekarang bisa dimatikan saat mati)
+      window.isGameOver = false;
+
       AFRAME.registerComponent('tap-to-move', {
         init: function () {
           this.rig = document.querySelector('#cameraRig');
           this.el.addEventListener('click', (evt) => {
-            if (window.isGameOver) return; // Kunci pergerakan jika mati
+            if (window.isGameOver) return; 
             
             var point = evt.detail.intersection.point;
             this.rig.setAttribute('animation', {
               property: 'position',
               to: point.x + ' 0 ' + point.z,
-              dur: 1000, // Dipercepat sedikit agar bisa lari dari monster
+              dur: 1000, 
               easing: 'linear'
             });
           });
         }
       });
 
-      // Lantai Endless
       AFRAME.registerComponent('endless-ground', {
         tick: function () {
           var camPos = document.querySelector('#cameraRig').object3D.position;
@@ -174,7 +168,6 @@
         }
       });
 
-      // Hutan Endless
       AFRAME.registerComponent('endless-forest', {
         schema: { treeCount: {type: 'int', default: 200}, radius: {type: 'number', default: 50} },
         init: function () {
@@ -215,14 +208,12 @@
         }
       });
 
-      // -- SISTEM SUDDEN DEATH (MUSUH PENGEJAR) -- //
-      window.isGameOver = false;
-
+      // -- SISTEM SUDDEN DEATH -- //
       AFRAME.registerComponent('threat-system', {
         init: function () {
           this.cameraRig = document.querySelector('#cameraRig');
           this.active = false;
-          this.speed = 4.5; // Kecepatan musuh (Pemain berlari ~10 unit per detik jika spam klik)
+          this.speed = 5.0; // Kecepatan dipercepat agar lebih menantang
           this.screechTimer = 0;
           this.threatPos = new THREE.Vector3();
         },
@@ -230,14 +221,14 @@
           this.active = true;
           window.isGameOver = false;
           
-          // Spawn musuh di radius 30 meter
+          // Spawn musuh lebih dekat (radius 20 meter dari pemain)
           let rigPos = this.cameraRig.object3D.position;
           let angle = Math.random() * Math.PI * 2;
-          let dist = 30;
+          let dist = 20;
           
           this.threatPos.set(
             rigPos.x + Math.cos(angle) * dist,
-            1.5, // Ketinggian melayang
+            1.5, 
             rigPos.z + Math.sin(angle) * dist
           );
           
@@ -248,10 +239,11 @@
           window.isGameOver = true;
           this.active = false;
           
-          // Hentikan pergerakan kamera jika sedang jalan
-          this.cameraRig.removeAttribute('animation');
+          // Posisikan hantu persis di depan mata kamera saat mati
+          let rigPos = this.cameraRig.object3D.position;
+          this.el.object3D.position.set(rigPos.x, rigPos.y + 1.5, rigPos.z - 1);
           
-          // Tampilkan overlay darah
+          this.cameraRig.removeAttribute('animation');
           document.getElementById('death-overlay').style.display = 'block';
           
           playDeathSound();
@@ -262,57 +254,54 @@
           let rigPos = this.cameraRig.object3D.position;
           let distToPlayer = this.threatPos.distanceTo(rigPos);
 
-          // Cek Jarak Kematian
-          if (distToPlayer < 2.5) {
+          // Radius deteksi tabrakan diperbesar menjadi 3.5 meter
+          if (distToPlayer < 3.5) {
             this.triggerDeath();
             return;
           }
 
-          // Pergerakan Mengejar Pemain
           let dir = new THREE.Vector3().subVectors(rigPos, this.threatPos).normalize();
-          // Pertahankan ketinggian Y
           dir.y = 0; 
           
           let moveDist = this.speed * (timeDelta / 1000);
           this.threatPos.addScaledVector(dir, moveDist);
           this.el.object3D.position.copy(this.threatPos);
-          this.el.object3D.lookAt(rigPos); // Menghadap pemain
+          this.el.object3D.lookAt(rigPos); 
 
-          // Timer Suara Lengkingan (Setiap 2 - 3 detik)
           this.screechTimer -= timeDelta;
           if (this.screechTimer <= 0) {
-            // Volume dikalkulasi berdasarkan jarak (Maks radius 40m)
-            let vol = Math.max(0, 1.0 - (distToPlayer / 40));
+            let vol = Math.max(0, 1.0 - (distToPlayer / 30));
             playScreech(vol);
             
-            this.screechTimer = 2000 + (Math.random() * 1000);
+            // Semakin dekat, jeritannya semakin sering (interval antara 1-2 detik)
+            this.screechTimer = 1000 + (Math.random() * 1000);
           }
         }
       });
 
-      // UI Init
+      // INISIALISASI UI
       document.addEventListener('DOMContentLoaded', () => {
         const startBtn = document.getElementById('start-btn');
         const startMenu = document.getElementById('start-menu');
-        const threatSystem = document.querySelector('#threatEntity').components['threat-system'];
 
         startBtn.addEventListener('click', () => {
           if (audioCtx.state === 'suspended') audioCtx.resume();
           
-          // Unlock Audio Playback
           const buffer = audioCtx.createBuffer(1, 1, 22050);
           const source = audioCtx.createBufferSource();
           source.buffer = buffer; source.connect(audioCtx.destination);
           if (source.start) source.start(0); else source.noteOn(0);
 
           playBGM();
-          
           startMenu.style.display = 'none';
           
-          // Beri jeda 3 detik sebelum musuh mulai mengejar
+          // Bug Fix: Kita panggil component tepat saat Timeout berjalan untuk memastikan A-Frame sudah selesai render
           setTimeout(() => {
-            threatSystem.startGame();
-          }, 3000);
+            const threatEntity = document.querySelector('#threatEntity');
+            if (threatEntity && threatEntity.components['threat-system']) {
+              threatEntity.components['threat-system'].startGame();
+            }
+          }, 2000); // Waktu jeda dipersingkat menjadi 2 detik saja
         });
       });
     </script>
@@ -331,13 +320,11 @@
       <h1 id="death-text">YOU DIED</h1>
     </div>
 
-    <!-- Warna fog Teal Gelap -->
     <a-scene fog="type: exponential; color: #071313; density: 0.065" background="color: #071313">
 
       <a-entity id="cameraRig" position="0 0 0">
         <a-camera position="0 1.6 0" look-controls="pointerLockEnabled: false">
           
-          <!-- Cursor Interaksi -->
           <a-entity cursor="rayOrigin: mouse;"
                     raycaster="objects: .walkable"
                     position="0 0 -1"
@@ -348,27 +335,21 @@
         </a-camera>
       </a-entity>
 
-      <!-- ENTITAS MUSUH (SUDDEN DEATH TRIGGER) -->
-      <!-- Menggunakan komponen threat-system -->
+      <!-- ENTITAS MUSUH PENGEJAR -->
       <a-entity id="threatEntity" visible="false" threat-system>
-        <!-- Inti merah berdenyut (Mata/Core) -->
-        <a-sphere radius="0.3" position="0 1.5 0" color="#ff0000" material="shader: flat; transparent: true; opacity: 0.8" 
-                  animation="property: scale; to: 1.5 1.5 1.5; dir: alternate; dur: 500; loop: true"></a-sphere>
-        <!-- Asap/Badan Hitam Pembungkus -->
+        <!-- Inti merah berdenyut -->
+        <a-sphere radius="0.4" position="0 1.5 0" color="#ff0000" material="shader: flat; transparent: true; opacity: 0.8" 
+                  animation="property: scale; to: 1.5 1.5 1.5; dir: alternate; dur: 300; loop: true"></a-sphere>
         <a-sphere radius="1.2" position="0 1.2 0" color="#000000" material="shader: flat; transparent: true; opacity: 0.95"></a-sphere>
         <a-sphere radius="1.5" position="0.2 0.8 -0.2" color="#050505" material="shader: flat; transparent: true; opacity: 0.6"></a-sphere>
-        <!-- Lengan Hitam Menjulur -->
         <a-box width="3" height="0.1" depth="0.5" position="0 1.2 0.5" color="#000000" material="shader: flat; transparent: true; opacity: 0.9"></a-box>
       </a-entity>
 
-      <!-- Pencahayaan Lingkungan -->
       <a-light type="ambient" color="#1a2525"></a-light>
       <a-light type="point" color="#88cccc" intensity="0.4" position="0 15 0" distance="50"></a-light>
 
-      <!-- Area Walkable -->
       <a-plane class="walkable" tap-to-move endless-ground rotation="-90 0 0" width="200" height="200" color="#030808" material="shader: flat"></a-plane>
       
-      <!-- Hutan Halangan Generatif -->
       <a-entity endless-forest="treeCount: 200; radius: 50"></a-entity>
 
     </a-scene>
