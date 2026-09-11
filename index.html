@@ -54,7 +54,6 @@
         position: absolute;
         top: 0; left: 0; width: 100%; height: 100%;
         z-index: 9999;
-        /* pointer-events dihilangkan agar tombol bisa diklik */
         flex-direction: column;
         align-items: center;
         justify-content: center;
@@ -231,7 +230,7 @@
         }
       });
 
-      // -- SISTEM SUDDEN DEATH -- //
+      // -- SISTEM SUDDEN DEATH (SKULL ENEMY) -- //
       AFRAME.registerComponent('threat-system', {
         init: function () {
           this.cameraRig = document.querySelector('#cameraRig');
@@ -255,14 +254,14 @@
             }
           }, 100);
 
-          // Spawn musuh
+          // Spawn musuh (jarak 20 meter, posisi acak melingkar)
           let rigPos = this.cameraRig.object3D.position;
           let angle = Math.random() * Math.PI * 2;
           let dist = 20;
           
           this.threatPos.set(
             rigPos.x + Math.cos(angle) * dist,
-            1.5, 
+            1.6, // Setinggi mata
             rigPos.z + Math.sin(angle) * dist
           );
           
@@ -274,8 +273,9 @@
           this.active = false;
           clearInterval(window.timerInterval);
           
+          // Letakkan tengkorak di depan muka (Jump scare mati)
           let rigPos = this.cameraRig.object3D.position;
-          this.el.object3D.position.set(rigPos.x, rigPos.y + 1.5, rigPos.z - 1);
+          this.el.object3D.position.set(rigPos.x, rigPos.y + 1.5, rigPos.z - 1.2);
           
           this.cameraRig.removeAttribute('animation');
           
@@ -303,6 +303,8 @@
           let moveDist = this.speed * (timeDelta / 1000);
           this.threatPos.addScaledVector(dir, moveDist);
           this.el.object3D.position.copy(this.threatPos);
+          
+          // Tengkorak selalu menatap ke arah player (Wajah ada di posisi Z-Positif lokal)
           this.el.object3D.lookAt(rigPos); 
 
           this.screechTimer -= timeDelta;
@@ -358,7 +360,6 @@
           camRig.removeAttribute('animation');
           camRig.object3D.position.set(0, 0, 0);
           
-          // Jeda sebentar sebelum musuh spawn lagi
           initAudioAndStart();
         });
       });
@@ -398,13 +399,39 @@
         </a-camera>
       </a-entity>
 
-      <!-- ENTITAS MUSUH PENGEJAR -->
+      <!-- ENTITAS MUSUH PENGEJAR: 3D Low Poly Red Skull -->
       <a-entity id="threatEntity" visible="false" threat-system>
-        <a-sphere radius="0.4" position="0 1.5 0" color="#ff0000" material="shader: flat; transparent: true; opacity: 0.8" 
-                  animation="property: scale; to: 1.5 1.5 1.5; dir: alternate; dur: 300; loop: true"></a-sphere>
-        <a-sphere radius="1.2" position="0 1.2 0" color="#000000" material="shader: flat; transparent: true; opacity: 0.95"></a-sphere>
-        <a-sphere radius="1.5" position="0.2 0.8 -0.2" color="#050505" material="shader: flat; transparent: true; opacity: 0.6"></a-sphere>
-        <a-box width="3" height="0.1" depth="0.5" position="0 1.2 0.5" color="#000000" material="shader: flat; transparent: true; opacity: 0.9"></a-box>
+        
+        <!-- Wrapper animasi agar tengkorak terlihat "melayang/floating" naik-turun -->
+        <a-entity animation="property: position; to: 0 0.3 0; dir: alternate; dur: 1200; loop: true; easing: easeInOutSine">
+          
+          <!-- Cranium (Tulang Kepala Atas) -->
+          <a-icosahedron radius="0.6" color="#ff0000" material="flatShading: true; roughness: 1; emissive: #330000; emissiveIntensity: 0.5"></a-icosahedron>
+          
+          <!-- Tulang Pipi / Rahang Atas -->
+          <a-box width="0.75" height="0.4" depth="0.5" position="0 -0.4 0.2" color="#dd0000" material="flatShading: true; roughness: 1; emissive: #220000"></a-box>
+          
+          <!-- Rahang Bawah -->
+          <a-box width="0.5" height="0.3" depth="0.4" position="0 -0.7 0.25" color="#aa0000" material="flatShading: true; roughness: 1"></a-box>
+          
+          <!-- Soket Mata Kiri -->
+          <a-icosahedron radius="0.18" position="-0.25 -0.1 0.52" color="#000" material="flatShading: true"></a-icosahedron>
+          
+          <!-- Soket Mata Kanan -->
+          <a-icosahedron radius="0.18" position="0.25 -0.1 0.52" color="#000" material="flatShading: true"></a-icosahedron>
+          
+          <!-- Rongga Hidung -->
+          <a-tetrahedron radius="0.12" position="0 -0.35 0.55" rotation="35 0 0" color="#000" material="flatShading: true"></a-tetrahedron>
+          
+          <!-- Detail Gigi Hitam (Garis Vertikal) -->
+          <a-box width="0.05" height="0.2" depth="0.1" position="-0.15 -0.55 0.48" color="#000"></a-box>
+          <a-box width="0.05" height="0.2" depth="0.1" position="0 -0.55 0.5" color="#000"></a-box>
+          <a-box width="0.05" height="0.2" depth="0.1" position="0.15 -0.55 0.48" color="#000"></a-box>
+
+          <!-- Cahaya merah darah yang memancar dari kepala tengkorak -->
+          <a-light type="point" color="#ff0000" intensity="1.5" distance="6" position="0 0 0.5"></a-light>
+          
+        </a-entity>
       </a-entity>
 
       <a-light type="ambient" color="#1a2525"></a-light>
