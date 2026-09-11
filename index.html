@@ -2,13 +2,12 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>Endless VR Limbo - Sudden Death & Footsteps</title>
+    <title>Endless VR Limbo - Binaural Survival</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     
     <style>
       body, html { margin: 0; padding: 0; overflow: hidden; background-color: #000; }
       
-      /* UI Overlay Darah Kematian */
       #death-overlay {
         display: none;
         position: absolute;
@@ -59,30 +58,27 @@
     <script>
       const AudioContext = window.AudioContext || window.webkitAudioContext;
       const audioCtx = new AudioContext();
+      let threatPanner; // Node untuk Spatial Audio (Binaural)
       
       window.isGameOver = false;
       window.gameStarted = false;
 
-      // -- SISTEM SFX (FOOTSTEP & MONSTER) -- //
-      
-      // Suara langkah kaki di daun kering (White Noise + Bandpass Filter)
+      // -- SISTEM SFX FOOTSTEP (Langkah kaki pemain, tidak di-spatial) -- //
       function playFootstep() {
         if (audioCtx.state !== 'running') return;
-        const bufferSize = audioCtx.sampleRate * 0.1; // Durasi 100ms
+        const bufferSize = audioCtx.sampleRate * 0.1; 
         const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
         const data = buffer.getChannelData(0);
-        // Bikin suara berisik (kresek)
         for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
 
         const noise = audioCtx.createBufferSource();
         noise.buffer = buffer;
-
         const filter = audioCtx.createBiquadFilter();
         filter.type = 'bandpass';
-        filter.frequency.value = 1200; // Frekuensi daun kering
+        filter.frequency.value = 1200; 
 
         const gain = audioCtx.createGain();
-        gain.gain.setValueAtTime(0.6, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
 
         noise.connect(filter);
@@ -91,55 +87,69 @@
         noise.start();
       }
 
-      // Suara Lengkingan Monster
-      function playScreech(volumeMult) {
-        if (audioCtx.state !== 'running') return;
+      // -- SISTEM LENGKINGAN MONSTER (Disambung ke Panner/Spatial Audio) -- //
+      function playScreech() {
+        if (audioCtx.state !== 'running' || !threatPanner) return;
         const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
+        const envelope = audioCtx.createGain();
         
         osc.type = 'sawtooth';
         osc.frequency.setValueAtTime(800, audioCtx.currentTime);
         osc.frequency.exponentialRampToValueAtTime(2800, audioCtx.currentTime + 0.3);
         osc.frequency.exponentialRampToValueAtTime(900, audioCtx.currentTime + 0.6);
         
-        let finalVol = Math.max(0.01, volumeMult * 3); 
+        // Volume murni, redaman jarak (attenuation) akan diurus otomatis oleh HRTF Panner
+        envelope.gain.setValueAtTime(0.01, audioCtx.currentTime);
+        envelope.gain.linearRampToValueAtTime(3.0, audioCtx.currentTime + 0.1);
+        envelope.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.8);
         
-        gain.gain.setValueAtTime(0, audioCtx.currentTime);
-        gain.gain.linearRampToValueAtTime(finalVol, audioCtx.currentTime + 0.1);
-        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.8);
+        osc.connect(envelope);
+        // Sambungkan ke Panner Spatial, bukan ke destination utama
+        envelope.connect(threatPanner);
         
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
         osc.start(); 
         osc.stop(audioCtx.currentTime + 1);
       }
 
       function playDeathSound() {
-        if (audioCtx.state !== 'running') return;
+        if (audioCtx.state !== 'running' || !threatPanner) return;
         const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
+        const envelope = audioCtx.createGain();
         
         osc.type = 'square';
         osc.frequency.setValueAtTime(150, audioCtx.currentTime);
         osc.frequency.exponentialRampToValueAtTime(10, audioCtx.currentTime + 0.5);
         
-        gain.gain.setValueAtTime(4, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 1.5);
+        envelope.gain.setValueAtTime(5, audioCtx.currentTime);
+        envelope.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 1.5);
         
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
+        osc.connect(envelope);
+        envelope.connect(threatPanner); // Suara kematian juga dari posisi monster
         osc.start(); 
         osc.stop(audioCtx.currentTime + 2);
       }
 
-      // -- UNLOCK AUDIO PADA SENTUHAN PERTAMA -- //
+      // -- UNLOCK AUDIO & INIT SPATIAL PANNER -- //
       function unlockAudio() {
         if (audioCtx.state === 'suspended') audioCtx.resume();
+        
+        // Pancing browser
         const buffer = audioCtx.createBuffer(1, 1, 22050);
         const source = audioCtx.createBufferSource();
         source.buffer = buffer; source.connect(audioCtx.destination);
         if (source.start) source.start(0); else source.noteOn(0);
         
+        // Setup PannerNode dengan HRTF untuk Spatial 3D
+        if (!threatPanner) {
+          threatPanner = audioCtx.createPanner();
+          threatPanner.panningModel = 'HRTF'; // Rahasia efek Binaural
+          threatPanner.distanceModel = 'inverse';
+          threatPanner.refDistance = 2; // Titik maksimal suara paling keras
+          threatPanner.maxDistance = 40; // Batas redaman
+          threatPanner.rolloffFactor = 1.5;
+          threatPanner.connect(audioCtx.destination);
+        }
+
         window.removeEventListener('touchstart', unlockAudio);
         window.removeEventListener('mousedown', unlockAudio);
       }
@@ -147,22 +157,19 @@
       window.addEventListener('mousedown', unlockAudio, false);
 
 
-      // -- SISTEM JALAN MULUS (TIDAK TELEPORT) & FOOTSTEP -- //
+      // -- SISTEM JALAN -- //
       AFRAME.registerComponent('player-movement', {
         init: function () {
           this.targetPos = null;
-          this.speed = 4.5; // Kecepatan jalan player (m/s)
+          this.speed = 4.5; 
           this.nextStepTime = 0;
           this.rig = document.querySelector('#cameraRig');
 
           let walkable = document.querySelector('.walkable');
           walkable.addEventListener('click', (evt) => {
             if (window.isGameOver) return;
-            
-            // Set target tujuan jalan
             this.targetPos = evt.detail.intersection.point;
             
-            // Mulai game / panggil monster pada tap pertama
             if (!window.gameStarted) {
               window.gameStarted = true;
               document.getElementById('instruction').style.opacity = '0';
@@ -176,35 +183,29 @@
           let currentPos = this.rig.object3D.position;
           let dist = currentPos.distanceTo(this.targetPos);
 
-          // Jika belum sampai di tujuan
           if (dist > 0.1) {
-            // Kalkulasi arah
             let dir = this.targetPos.clone().sub(currentPos).normalize();
-            dir.y = 0; // Kunci di tanah
-            
+            dir.y = 0; 
             let moveDist = this.speed * (timeDelta / 1000);
-            if (moveDist > dist) moveDist = dist; // Cegah kebablasan
+            if (moveDist > dist) moveDist = dist; 
             
-            // Bergerak perlahan
             currentPos.addScaledVector(dir, moveDist);
 
-            // Putar SFX daun kering secara ritmis
             if (time > this.nextStepTime) {
               playFootstep();
-              this.nextStepTime = time + 350; // Jarak antar langkah (ms)
+              this.nextStepTime = time + 350; 
             }
           }
         }
       });
 
-      // -- SISTEM GENERATOR HUTAN & SEMAK (BUSHES) -- //
+      // -- SISTEM GENERATOR SCENERY -- //
       AFRAME.registerComponent('endless-scenery', {
         schema: { itemsCount: {type: 'int', default: 300}, radius: {type: 'number', default: 50} },
         init: function () {
           this.items = [];
           this.cameraRig = document.querySelector('#cameraRig');
           
-          // Generate 150 Pohon
           for (let i = 0; i < this.data.itemsCount / 2; i++) {
             let tree = document.createElement('a-cylinder');
             tree.setAttribute('color', '#010202');
@@ -218,14 +219,12 @@
             this.items.push({el: tree, yOffset: height / 2});
           }
 
-          // Generate 150 Semak (Bushes)
           for (let i = 0; i < this.data.itemsCount / 2; i++) {
             let bush = document.createElement('a-sphere');
             bush.setAttribute('color', '#000000');
             bush.setAttribute('material', 'shader: flat');
             let radius = Math.random() * 1.5 + 0.5;
             bush.setAttribute('radius', radius);
-            // Gepengkan sphere untuk bentuk semak
             bush.setAttribute('scale', '1 0.6 1'); 
             this.repositionItem(bush, true, radius * 0.4);
             this.el.appendChild(bush);
@@ -247,8 +246,7 @@
           let camPos = this.cameraRig.object3D.position;
           let angle = Math.random() * Math.PI * 2;
           let dist = isInit ? Math.random() * this.data.radius : this.data.radius - 2;
-          if (isInit && dist < 3) dist += 5; // Jangan spawn numpuk di player saat awal
-          
+          if (isInit && dist < 3) dist += 5; 
           let tx = camPos.x + Math.cos(angle) * dist;
           let tz = camPos.z + Math.sin(angle) * dist;
           el.object3D.position.set(tx, yOff, tz);
@@ -262,12 +260,13 @@
         }
       });
 
-      // -- SISTEM SUDDEN DEATH PENGEJAR -- //
+      // -- SISTEM PENGEJAR & PENGHITUNG SPATIAL AUDIO -- //
       AFRAME.registerComponent('threat-system', {
         init: function () {
           this.cameraRig = document.querySelector('#cameraRig');
+          this.vrCamera = document.querySelector('a-camera');
           this.active = false;
-          this.speed = 4.2; // Sedikit lebih lambat dari player (4.5) agar bisa kabur
+          this.speed = 4.2; 
           this.screechTimer = 0;
           this.threatPos = new THREE.Vector3();
         },
@@ -275,9 +274,10 @@
           this.active = true;
           window.isGameOver = false;
           
-          // Spawn di belakang player jarak 25 meter
           let rigPos = this.cameraRig.object3D.position;
-          this.threatPos.set(rigPos.x, 1.5, rigPos.z + 25);
+          // Spawn di belakang (Z + 25) dengan variasi sudut agar suara terasa dari arah acak
+          let angle = Math.random() * Math.PI * 2;
+          this.threatPos.set(rigPos.x + Math.cos(angle)*25, 1.5, rigPos.z + Math.sin(angle)*25);
           
           this.el.object3D.position.copy(this.threatPos);
           this.el.setAttribute('visible', 'true');
@@ -286,7 +286,6 @@
           window.isGameOver = true;
           this.active = false;
           
-          // Kematian Instan
           let rigPos = this.cameraRig.object3D.position;
           this.el.object3D.position.set(rigPos.x, rigPos.y + 1.5, rigPos.z - 1.5);
           
@@ -299,13 +298,12 @@
           let rigPos = this.cameraRig.object3D.position;
           let distToPlayer = this.threatPos.distanceTo(rigPos);
 
-          // Jarak kematian
           if (distToPlayer < 3.5) {
             this.triggerDeath();
             return;
           }
 
-          // Bergerak mengejar
+          // Move Monster
           let dir = new THREE.Vector3().subVectors(rigPos, this.threatPos).normalize();
           dir.y = 0; 
           let moveDist = this.speed * (timeDelta / 1000);
@@ -313,12 +311,51 @@
           this.el.object3D.position.copy(this.threatPos);
           this.el.object3D.lookAt(rigPos); 
 
-          // Lengkingan random
+          // === UPDATE SPATIAL AUDIO KORDINAT (BINAURAL MAGIC) ===
+          if (threatPanner && audioCtx.state === 'running') {
+            
+            // 1. Update Posisi Listener (Pemain / Kamera)
+            const listener = audioCtx.listener;
+            let camWorldPos = new THREE.Vector3();
+            let camWorldDir = new THREE.Vector3();
+            this.vrCamera.object3D.getWorldPosition(camWorldPos);
+            this.vrCamera.object3D.getWorldDirection(camWorldDir);
+            
+            // ThreeJS look direction is -Z, spatial audio works differently so we invert
+            camWorldDir.multiplyScalar(-1); 
+            
+            if (listener.positionX) {
+              // API Modern
+              listener.positionX.setTargetAtTime(camWorldPos.x, audioCtx.currentTime, 0.05);
+              listener.positionY.setTargetAtTime(camWorldPos.y, audioCtx.currentTime, 0.05);
+              listener.positionZ.setTargetAtTime(camWorldPos.z, audioCtx.currentTime, 0.05);
+              listener.forwardX.setTargetAtTime(camWorldDir.x, audioCtx.currentTime, 0.05);
+              listener.forwardY.setTargetAtTime(camWorldDir.y, audioCtx.currentTime, 0.05);
+              listener.forwardZ.setTargetAtTime(camWorldDir.z, audioCtx.currentTime, 0.05);
+              listener.upX.setTargetAtTime(0, audioCtx.currentTime, 0.05);
+              listener.upY.setTargetAtTime(1, audioCtx.currentTime, 0.05);
+              listener.upZ.setTargetAtTime(0, audioCtx.currentTime, 0.05);
+            } else {
+              // Fallback Browser Lama
+              listener.setPosition(camWorldPos.x, camWorldPos.y, camWorldPos.z);
+              listener.setOrientation(camWorldDir.x, camWorldDir.y, camWorldDir.z, 0, 1, 0);
+            }
+
+            // 2. Update Posisi Panner (Monster)
+            if (threatPanner.positionX) {
+              threatPanner.positionX.setTargetAtTime(this.threatPos.x, audioCtx.currentTime, 0.05);
+              threatPanner.positionY.setTargetAtTime(this.threatPos.y, audioCtx.currentTime, 0.05);
+              threatPanner.positionZ.setTargetAtTime(this.threatPos.z, audioCtx.currentTime, 0.05);
+            } else {
+              threatPanner.setPosition(this.threatPos.x, this.threatPos.y, this.threatPos.z);
+            }
+          }
+
+          // Timer Lengkingan
           this.screechTimer -= timeDelta;
           if (this.screechTimer <= 0) {
-            let vol = Math.max(0, 1.0 - (distToPlayer / 40));
-            playScreech(vol);
-            this.screechTimer = 2000 + (Math.random() * 2000); // Tiap 2-4 detik
+            playScreech(); // Tidak butuh parameter volume, jaraknya sekarang 100% fisika 3D
+            this.screechTimer = 1500 + (Math.random() * 2000); 
           }
         }
       });
@@ -326,7 +363,7 @@
   </head>
   <body>
     
-    <div id="instruction">TAP THE FLOOR TO RUN. DON'T LOOK BACK.</div>
+    <div id="instruction">USE HEADPHONES 🎧<br><br>TAP THE FLOOR TO RUN.<br>TRUST YOUR EARS.</div>
 
     <div id="death-overlay">
       <h1 id="death-text">YOU DIED</h1>
