@@ -8,32 +8,64 @@
     <style>
       body, html { margin: 0; padding: 0; overflow: hidden; background-color: #000; }
       
-      /* UI Start Menu */
+      /* UI Start Menu (Sesuai Referensi Gambar) */
       #start-menu {
         position: absolute;
         top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(0, 0, 0, 0.85);
+        background: transparent;
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
         z-index: 10000;
-        font-family: monospace;
-        color: #fff;
       }
-      .btn {
-        background: #440000;
+
+      #start-menu-box {
+        background: rgba(15, 25, 25, 0.8);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+        padding: 40px 60px;
+        text-align: center;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+        backdrop-filter: blur(3px);
+      }
+
+      #start-menu-box h1 {
+        color: #ff4444;
+        font-family: 'Courier New', monospace;
+        font-size: 32px;
+        margin-top: 0;
+        margin-bottom: 25px;
+        text-shadow: 0 0 15px rgba(255, 0, 0, 0.8);
+        letter-spacing: 2px;
+      }
+
+      #start-menu-box p {
+        color: #fff;
+        font-family: monospace;
+        font-size: 16px;
+        line-height: 1.6;
+        margin-bottom: 40px;
+      }
+
+      .btn-glow {
+        background: transparent;
         color: white;
         border: 2px solid #ff0000;
-        padding: 15px 40px;
-        font-size: 20px;
+        border-radius: 4px;
+        padding: 12px 35px;
+        font-size: 18px;
         font-weight: bold;
+        font-family: monospace;
         cursor: pointer;
         text-transform: uppercase;
-        box-shadow: 0 0 15px rgba(255, 0, 0, 0.5);
+        box-shadow: 0 0 15px rgba(255, 0, 0, 0.5), inset 0 0 10px rgba(255, 0, 0, 0.3);
         transition: 0.3s;
       }
-      .btn:hover { background: #ff0000; color: #000; }
+      .btn-glow:hover { 
+        background: rgba(255, 0, 0, 0.15); 
+        box-shadow: 0 0 25px rgba(255, 0, 0, 0.8), inset 0 0 20px rgba(255, 0, 0, 0.6);
+      }
 
       /* Timer In-Game */
       #hud-timer {
@@ -162,7 +194,7 @@
 
 
       // -- SISTEM KONTROL & GAMEPLAY -- //
-      window.isGameOver = false;
+      window.isGameOver = true; // Set true at start so player can't move during menu
       window.gameStartTime = 0;
       window.timerInterval = null;
 
@@ -261,7 +293,7 @@
           
           this.threatPos.set(
             rigPos.x + Math.cos(angle) * dist,
-            1.6, // Setinggi mata
+            1.6, 
             rigPos.z + Math.sin(angle) * dist
           );
           
@@ -273,7 +305,7 @@
           this.active = false;
           clearInterval(window.timerInterval);
           
-          // Letakkan tengkorak di depan muka (Jump scare mati)
+          // Letakkan tengkorak di depan muka
           let rigPos = this.cameraRig.object3D.position;
           this.el.object3D.position.set(rigPos.x, rigPos.y + 1.5, rigPos.z - 1.2);
           
@@ -304,7 +336,6 @@
           this.threatPos.addScaledVector(dir, moveDist);
           this.el.object3D.position.copy(this.threatPos);
           
-          // Tengkorak selalu menatap ke arah player (Wajah ada di posisi Z-Positif lokal)
           this.el.object3D.lookAt(rigPos); 
 
           this.screechTimer -= timeDelta;
@@ -335,7 +366,6 @@
             bgmStarted = true;
           }
           
-          // Mulai sistem musuh & timer
           setTimeout(() => {
             const threatEntity = document.querySelector('#threatEntity');
             if (threatEntity && threatEntity.components['threat-system']) {
@@ -355,7 +385,6 @@
           document.getElementById('death-overlay').style.display = 'none';
           document.getElementById('timer-val').innerText = "0.0";
           
-          // Reset posisi player ke origin
           const camRig = document.querySelector('#cameraRig');
           camRig.removeAttribute('animation');
           camRig.object3D.position.set(0, 0, 0);
@@ -369,9 +398,11 @@
     
     <!-- UI Menu Awal -->
     <div id="start-menu">
-      <h1 style="color: #ff0000; text-shadow: 0 0 10px red;">SURVIVE THE LIMBO</h1>
-      <p>Tap the floor to run. Move AWAY from the screeching sound.</p>
-      <button class="btn" id="start-btn">ENTER SURVIVAL</button>
+      <div id="start-menu-box">
+        <h1>SURVIVE THE LIMBO</h1>
+        <p>Tap the floor to run. Move<br>AWAY from the screeching sound.</p>
+        <button class="btn-glow" id="start-btn">ENTER SURVIVAL</button>
+      </div>
     </div>
 
     <!-- HUD Timer saat Game Berjalan -->
@@ -381,7 +412,7 @@
     <div id="death-overlay">
       <h1 id="death-text">YOU DIED</h1>
       <p id="final-time">You survived for: <span id="final-time-val" style="color: #ff0000; font-weight: bold;">0.0</span>s</p>
-      <button class="btn" id="restart-btn">PLAY AGAIN</button>
+      <button class="btn-glow" style="background: #110000;" id="restart-btn">PLAY AGAIN</button>
     </div>
 
     <a-scene fog="type: exponential; color: #071313; density: 0.065" background="color: #071313">
@@ -401,34 +432,19 @@
 
       <!-- ENTITAS MUSUH PENGEJAR: 3D Low Poly Red Skull -->
       <a-entity id="threatEntity" visible="false" threat-system>
-        
-        <!-- Wrapper animasi agar tengkorak terlihat "melayang/floating" naik-turun -->
         <a-entity animation="property: position; to: 0 0.3 0; dir: alternate; dur: 1200; loop: true; easing: easeInOutSine">
           
-          <!-- Cranium (Tulang Kepala Atas) -->
           <a-icosahedron radius="0.6" color="#ff0000" material="flatShading: true; roughness: 1; emissive: #330000; emissiveIntensity: 0.5"></a-icosahedron>
-          
-          <!-- Tulang Pipi / Rahang Atas -->
           <a-box width="0.75" height="0.4" depth="0.5" position="0 -0.4 0.2" color="#dd0000" material="flatShading: true; roughness: 1; emissive: #220000"></a-box>
-          
-          <!-- Rahang Bawah -->
           <a-box width="0.5" height="0.3" depth="0.4" position="0 -0.7 0.25" color="#aa0000" material="flatShading: true; roughness: 1"></a-box>
-          
-          <!-- Soket Mata Kiri -->
           <a-icosahedron radius="0.18" position="-0.25 -0.1 0.52" color="#000" material="flatShading: true"></a-icosahedron>
-          
-          <!-- Soket Mata Kanan -->
           <a-icosahedron radius="0.18" position="0.25 -0.1 0.52" color="#000" material="flatShading: true"></a-icosahedron>
-          
-          <!-- Rongga Hidung -->
           <a-tetrahedron radius="0.12" position="0 -0.35 0.55" rotation="35 0 0" color="#000" material="flatShading: true"></a-tetrahedron>
           
-          <!-- Detail Gigi Hitam (Garis Vertikal) -->
           <a-box width="0.05" height="0.2" depth="0.1" position="-0.15 -0.55 0.48" color="#000"></a-box>
           <a-box width="0.05" height="0.2" depth="0.1" position="0 -0.55 0.5" color="#000"></a-box>
           <a-box width="0.05" height="0.2" depth="0.1" position="0.15 -0.55 0.48" color="#000"></a-box>
 
-          <!-- Cahaya merah darah yang memancar dari kepala tengkorak -->
           <a-light type="point" color="#ff0000" intensity="1.5" distance="6" position="0 0 0.5"></a-light>
           
         </a-entity>
