@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>Endless VR Limbo - Dementor Scare</title>
+    <title>Endless VR Limbo - Flitting Dementor</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     
     <style>
@@ -33,7 +33,6 @@
     </style>
 
     <script>
-      // INISIALISASI AUDIO & UNLOCKER
       const AudioContext = window.AudioContext || window.webkitAudioContext;
       const audioCtx = new AudioContext();
       let bgmStarted = false;
@@ -46,9 +45,7 @@
         const bufferSize = audioCtx.sampleRate * 2; 
         const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
         const output = noiseBuffer.getChannelData(0);
-        for (let i = 0; i < bufferSize; i++) {
-          output[i] = Math.random() * 2 - 1;
-        }
+        for (let i = 0; i < bufferSize; i++) { output[i] = Math.random() * 2 - 1; }
 
         const whiteNoise = audioCtx.createBufferSource();
         whiteNoise.buffer = noiseBuffer;
@@ -83,22 +80,16 @@
         drone.connect(droneGain);
         droneGain.connect(audioCtx.destination);
 
-        whiteNoise.start();
-        lfo.start();
-        drone.start();
+        whiteNoise.start(); lfo.start(); drone.start();
       }
 
       function unlockAudio() {
-        if (audioCtx.state === 'suspended') {
-          audioCtx.resume();
-        }
-        
+        if (audioCtx.state === 'suspended') audioCtx.resume();
         const buffer = audioCtx.createBuffer(1, 1, 22050);
         const source = audioCtx.createBufferSource();
         source.buffer = buffer;
         source.connect(audioCtx.destination);
-        if (source.start) source.start(0);
-        else source.noteOn(0);
+        if (source.start) source.start(0); else source.noteOn(0);
 
         startWhisperBGM();
 
@@ -108,7 +99,7 @@
       window.addEventListener('touchstart', unlockAudio, false);
       window.addEventListener('click', unlockAudio, false);
 
-      // Sistem Tap to Move
+      // Tap to Move
       AFRAME.registerComponent('tap-to-move', {
         init: function () {
           var rig = document.querySelector('#cameraRig');
@@ -124,7 +115,7 @@
         }
       });
 
-      // Sistem Endless Ground
+      // Endless Ground
       AFRAME.registerComponent('endless-ground', {
         tick: function () {
           var camPos = document.querySelector('#cameraRig').object3D.position;
@@ -132,7 +123,7 @@
         }
       });
 
-      // Sistem Endless Forest
+      // Endless Forest
       AFRAME.registerComponent('endless-forest', {
         schema: { treeCount: {type: 'int', default: 200}, radius: {type: 'number', default: 50} },
         init: function () {
@@ -173,7 +164,7 @@
         }
       });
 
-      // Sistem Jump Scare Dementor
+      // Sistem Jump Scare (Berkelebat)
       document.addEventListener('DOMContentLoaded', () => {
         const toggleBtn = document.getElementById('scareToggle');
         const scareEntity = document.getElementById('scareEntity');
@@ -181,65 +172,88 @@
         let scareActive = true; 
         let scareTimer = null;
 
-        function playDementorDashSound() {
+        // Suara berkelebat cepat (swoosh)
+        function playDartSound() {
+          if (audioCtx.state !== 'running') return;
+          const osc = audioCtx.createOscillator();
+          const gainNode = audioCtx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.2);
+          gainNode.gain.setValueAtTime(0.01, audioCtx.currentTime);
+          gainNode.gain.exponentialRampToValueAtTime(1, audioCtx.currentTime + 0.1);
+          gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+          osc.connect(gainNode);
+          gainNode.connect(audioCtx.destination);
+          osc.start(); osc.stop(audioCtx.currentTime + 0.4);
+        }
+
+        // Suara serangan utama
+        function playAttackSound() {
           if (audioCtx.state !== 'running') return; 
-          
           const osc1 = audioCtx.createOscillator();
           const osc2 = audioCtx.createOscillator();
           const gainNode = audioCtx.createGain();
-          
           osc1.type = 'sine';
           osc1.frequency.setValueAtTime(90, audioCtx.currentTime);
-          osc1.frequency.exponentialRampToValueAtTime(20, audioCtx.currentTime + 0.8);
-          
+          osc1.frequency.exponentialRampToValueAtTime(20, audioCtx.currentTime + 0.6);
           osc2.type = 'sawtooth';
           osc2.frequency.setValueAtTime(200, audioCtx.currentTime);
-          osc2.frequency.exponentialRampToValueAtTime(30, audioCtx.currentTime + 0.8);
-
-          // Volume membesar perlahan (crescendo) selama 800ms
+          osc2.frequency.exponentialRampToValueAtTime(30, audioCtx.currentTime + 0.6);
           gainNode.gain.setValueAtTime(0.01, audioCtx.currentTime);
-          gainNode.gain.exponentialRampToValueAtTime(5, audioCtx.currentTime + 0.8);
-          gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 1.3);
-          
-          osc1.connect(gainNode);
-          osc2.connect(gainNode);
+          gainNode.gain.exponentialRampToValueAtTime(6, audioCtx.currentTime + 0.5);
+          gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 1.0);
+          osc1.connect(gainNode); osc2.connect(gainNode);
           gainNode.connect(audioCtx.destination);
-          
           osc1.start(); osc2.start();
-          osc1.stop(audioCtx.currentTime + 1.4); osc2.stop(audioCtx.currentTime + 1.4);
+          osc1.stop(audioCtx.currentTime + 1.1); osc2.stop(audioCtx.currentTime + 1.1);
         }
 
         function triggerScare() {
           if (!scareActive) return;
           
-          // Posisi awal di kejauhan (Z = -12) dan sedikit melayang di atas tanah (Y = 1.5)
-          scareEntity.setAttribute('position', '0 1.5 -12');
           scareEntity.setAttribute('scale', '1 1 1');
           scareEntity.setAttribute('visible', 'true');
           
-          // Melesat mendekat selama 800ms agar terlihat sedang terbang menghampiri
-          scareEntity.setAttribute('animation__dash', {
-            property: 'position',
-            to: '0 1 -0.2',
-            dur: 800,
-            easing: 'easeInCubic'
-          });
-
-          // Tubuh membesar drastis (engulfing) saat mengenai kamera
-          scareEntity.setAttribute('animation__scale', {
-            property: 'scale',
-            to: '4 4 4',
-            dur: 800,
-            easing: 'easeInQuad'
-          });
-
-          playDementorDashSound();
+          // FASE 1: Muncul di Kiri Jauh
+          scareEntity.setAttribute('position', '-5 1.5 -10');
+          playDartSound();
           
-          // Sembunyikan setelah menabrak
           setTimeout(() => {
-            scareEntity.setAttribute('visible', 'false');
-            scheduleNextScare();
-          }, 950); 
+            // FASE 2: Berpindah ke Kanan Jauh
+            scareEntity.setAttribute('position', '5 2.5 -8');
+            playDartSound();
+            
+            setTimeout(() => {
+              // FASE 3: Muncul di Tengah dan Serang (Dash)
+              scareEntity.setAttribute('position', '0 1.5 -12');
+              playAttackSound();
+              
+              // Melesat cepat dalam 500ms
+              scareEntity.setAttribute('animation__dash', {
+                property: 'position',
+                to: '0 1 -0.2',
+                dur: 500,
+                easing: 'easeInCubic'
+              });
+
+              // Membesar menelan kamera
+              scareEntity.setAttribute('animation__scale', {
+                property: 'scale',
+                to: '5 5 5',
+                dur: 500,
+                easing: 'easeInQuad'
+              });
+
+              setTimeout(() => {
+                scareEntity.setAttribute('visible', 'false');
+                scareEntity.removeAttribute('animation__dash');
+                scareEntity.removeAttribute('animation__scale');
+                scheduleNextScare();
+              }, 600); 
+
+            }, 400); // Jeda sebelum serangan utama
+          }, 400); // Jeda berkelebat
         }
 
         function scheduleNextScare() {
@@ -272,7 +286,7 @@
       <button id="scareToggle" class="active" title="Toggle Scare">👁️</button>
     </div>
 
-    <!-- Density diturunkan ke 0.06 agar objek Z=-12 terlihat sebagai siluet -->
+    <!-- Kabut Limbo -->
     <a-scene fog="type: exponential; color: #0c0c0c; density: 0.06" background="color: #0c0c0c">
 
       <a-entity id="cameraRig" position="0 0 0">
@@ -285,15 +299,18 @@
                     material="color: #ffffff; shader: flat; opacity: 0.5">
           </a-entity>
           
-          <!-- MODEL DEMENTOR (Gabungan Bentuk Geometri Abstrak) -->
+          <!-- MODEL DEMENTOR DENGAN AURA AGAR TERLIHAT -->
           <a-entity id="scareEntity" visible="false" position="0 1.5 -12">
-            <!-- Jubah Inti (Menjulang ke atas) -->
+            <!-- Aura pucat (Glow samar) di belakang tubuh -->
+            <a-sphere radius="1.2" position="0 1.5 -0.2" color="#ffffff" material="shader: flat; transparent: true; opacity: 0.08"></a-sphere>
+            
+            <!-- Jubah Inti -->
             <a-cone radius-bottom="0.8" radius-top="0.2" height="3" color="#000000" material="shader: flat; transparent: true; opacity: 0.95"></a-cone>
-            <!-- Kepala Hitam Pekat -->
+            <!-- Kepala -->
             <a-sphere radius="0.35" position="0 1.5 0.1" color="#000000" material="shader: flat"></a-sphere>
             <!-- Jubah Berkibar Belakang -->
             <a-cylinder radius="0.7" height="2" position="0 0.5 0.2" rotation="-20 0 0" color="#050505" material="shader: flat; transparent: true; opacity: 0.8"></a-cylinder>
-            <!-- Lengan/Sayap Abstrak Menjulur Ke Depan -->
+            <!-- Lengan Menjulur -->
             <a-box width="2.5" height="0.2" depth="1" position="0 0.5 0.3" rotation="10 0 0" color="#000000" material="shader: flat; transparent: true; opacity: 0.9"></a-box>
           </a-entity>
 
@@ -305,7 +322,6 @@
 
       <a-plane class="walkable" tap-to-move endless-ground rotation="-90 0 0" width="200" height="200" color="#050505" material="shader: flat"></a-plane>
       
-      <!-- Jumlah pohon diturunkan ke 200 agar view kedatangan dementor tidak terlalu tertutup -->
       <a-entity endless-forest="treeCount: 200; radius: 50"></a-entity>
 
     </a-scene>
