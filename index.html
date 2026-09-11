@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>Endless VR Limbo - Flitting Dementor</title>
+    <title>Endless VR Limbo - Cinematic Dementor</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     
     <style>
@@ -37,7 +37,7 @@
       const audioCtx = new AudioContext();
       let bgmStarted = false;
 
-      // BGM BISIKAN
+      // 1. SISTEM BGM & AUDIO UNLOCKER
       function startWhisperBGM() {
         if (bgmStarted) return;
         bgmStarted = true;
@@ -53,14 +53,14 @@
 
         const filter = audioCtx.createBiquadFilter();
         filter.type = 'bandpass';
-        filter.frequency.value = 1000; 
-        filter.Q.value = 1.0;
+        filter.frequency.value = 800; // Frekuensi diturunkan agar lebih bergema
+        filter.Q.value = 1.2;
 
         const lfo = audioCtx.createOscillator();
         lfo.type = 'sine';
-        lfo.frequency.value = 1.5; 
+        lfo.frequency.value = 1.0; 
         const lfoGain = audioCtx.createGain();
-        lfoGain.gain.value = 600; 
+        lfoGain.gain.value = 500; 
         lfo.connect(lfoGain);
         lfoGain.connect(filter.frequency);
 
@@ -69,9 +69,9 @@
 
         const drone = audioCtx.createOscillator();
         drone.type = 'triangle';
-        drone.frequency.value = 45; 
+        drone.frequency.value = 40; 
         const droneGain = audioCtx.createGain();
-        droneGain.gain.value = 0.08; 
+        droneGain.gain.value = 0.1; 
 
         whiteNoise.connect(filter);
         filter.connect(whisperGain);
@@ -99,7 +99,46 @@
       window.addEventListener('touchstart', unlockAudio, false);
       window.addEventListener('click', unlockAudio, false);
 
-      // Tap to Move
+      // 2. SISTEM PARTIKEL JEJAK (TRAIL)
+      // Meninggalkan jejak gumpalan asap hitam yang mengecil dan memudar di belakang Dementor
+      AFRAME.registerComponent('shadow-trail', {
+        tick: function () {
+          // Hanya emit partikel jika entity sedang terlihat (sedang berkelebat)
+          if (!this.el.getAttribute('visible')) return;
+          
+          // Batasi spawn rate agar tidak lag di HP
+          if (Math.random() > 0.4) return;
+
+          let pos = new THREE.Vector3();
+          this.el.object3D.getWorldPosition(pos);
+
+          // Buat elemen partikel
+          let particle = document.createElement('a-sphere');
+          
+          // Randomisasi posisi di sekitar tubuh
+          let rx = (Math.random() - 0.5) * 0.8;
+          let ry = (Math.random() - 0.5) * 1.5;
+          let rz = (Math.random() - 0.5) * 1.0;
+
+          particle.setAttribute('position', `${pos.x + rx} ${pos.y + ry} ${pos.z + rz}`);
+          particle.setAttribute('radius', Math.random() * 0.4 + 0.2);
+          particle.setAttribute('color', '#000000');
+          particle.setAttribute('material', 'shader: flat; transparent: true; opacity: 0.7');
+
+          // Animasi partikel mengecil dan menghilang
+          particle.setAttribute('animation__scale', 'property: scale; to: 0 0 0; dur: 600; easing: linear');
+          particle.setAttribute('animation__opacity', 'property: material.opacity; to: 0; dur: 600; easing: linear');
+
+          this.el.sceneEl.appendChild(particle);
+
+          // Hapus dari memori setelah animasi selesai
+          setTimeout(() => {
+            if (particle.parentNode) particle.parentNode.removeChild(particle);
+          }, 600);
+        }
+      });
+
+      // 3. MEKANISME GAMEPLAY (Tap to move & Endless Forest)
       AFRAME.registerComponent('tap-to-move', {
         init: function () {
           var rig = document.querySelector('#cameraRig');
@@ -115,7 +154,6 @@
         }
       });
 
-      // Endless Ground
       AFRAME.registerComponent('endless-ground', {
         tick: function () {
           var camPos = document.querySelector('#cameraRig').object3D.position;
@@ -123,7 +161,6 @@
         }
       });
 
-      // Endless Forest
       AFRAME.registerComponent('endless-forest', {
         schema: { treeCount: {type: 'int', default: 200}, radius: {type: 'number', default: 50} },
         init: function () {
@@ -131,9 +168,10 @@
           this.cameraRig = document.querySelector('#cameraRig');
           for (let i = 0; i < this.data.treeCount; i++) {
             let tree = document.createElement('a-cylinder');
-            tree.setAttribute('color', '#000000');
+            // Warna pohon disesuaikan agar menyatu dengan kabut teal
+            tree.setAttribute('color', '#020505');
             tree.setAttribute('material', 'shader: flat; roughness: 1');
-            let radius = Math.random() * 0.5 + 0.1;
+            let radius = Math.random() * 0.4 + 0.1;
             let height = Math.random() * 20 + 10;
             tree.setAttribute('radius', radius);
             tree.setAttribute('height', height);
@@ -164,7 +202,7 @@
         }
       });
 
-      // Sistem Jump Scare (Berkelebat)
+      // 4. JUMP SCARE LOGIC (Berkelebat)
       document.addEventListener('DOMContentLoaded', () => {
         const toggleBtn = document.getElementById('scareToggle');
         const scareEntity = document.getElementById('scareEntity');
@@ -172,36 +210,34 @@
         let scareActive = true; 
         let scareTimer = null;
 
-        // Suara berkelebat cepat (swoosh)
         function playDartSound() {
           if (audioCtx.state !== 'running') return;
           const osc = audioCtx.createOscillator();
           const gainNode = audioCtx.createGain();
           osc.type = 'sine';
-          osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+          osc.frequency.setValueAtTime(120, audioCtx.currentTime);
           osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.2);
           gainNode.gain.setValueAtTime(0.01, audioCtx.currentTime);
-          gainNode.gain.exponentialRampToValueAtTime(1, audioCtx.currentTime + 0.1);
+          gainNode.gain.exponentialRampToValueAtTime(1.5, audioCtx.currentTime + 0.1);
           gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
           osc.connect(gainNode);
           gainNode.connect(audioCtx.destination);
           osc.start(); osc.stop(audioCtx.currentTime + 0.4);
         }
 
-        // Suara serangan utama
         function playAttackSound() {
           if (audioCtx.state !== 'running') return; 
           const osc1 = audioCtx.createOscillator();
           const osc2 = audioCtx.createOscillator();
           const gainNode = audioCtx.createGain();
           osc1.type = 'sine';
-          osc1.frequency.setValueAtTime(90, audioCtx.currentTime);
-          osc1.frequency.exponentialRampToValueAtTime(20, audioCtx.currentTime + 0.6);
+          osc1.frequency.setValueAtTime(80, audioCtx.currentTime);
+          osc1.frequency.exponentialRampToValueAtTime(15, audioCtx.currentTime + 0.6);
           osc2.type = 'sawtooth';
-          osc2.frequency.setValueAtTime(200, audioCtx.currentTime);
-          osc2.frequency.exponentialRampToValueAtTime(30, audioCtx.currentTime + 0.6);
+          osc2.frequency.setValueAtTime(180, audioCtx.currentTime);
+          osc2.frequency.exponentialRampToValueAtTime(25, audioCtx.currentTime + 0.6);
           gainNode.gain.setValueAtTime(0.01, audioCtx.currentTime);
-          gainNode.gain.exponentialRampToValueAtTime(6, audioCtx.currentTime + 0.5);
+          gainNode.gain.exponentialRampToValueAtTime(8, audioCtx.currentTime + 0.5);
           gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 1.0);
           osc1.connect(gainNode); osc2.connect(gainNode);
           gainNode.connect(audioCtx.destination);
@@ -215,32 +251,30 @@
           scareEntity.setAttribute('scale', '1 1 1');
           scareEntity.setAttribute('visible', 'true');
           
-          // FASE 1: Muncul di Kiri Jauh
-          scareEntity.setAttribute('position', '-5 1.5 -10');
+          // FASE 1: Muncul Kiri
+          scareEntity.setAttribute('position', '-6 1.5 -10');
           playDartSound();
           
           setTimeout(() => {
-            // FASE 2: Berpindah ke Kanan Jauh
-            scareEntity.setAttribute('position', '5 2.5 -8');
+            // FASE 2: Muncul Kanan
+            scareEntity.setAttribute('position', '6 2.5 -8');
             playDartSound();
             
             setTimeout(() => {
-              // FASE 3: Muncul di Tengah dan Serang (Dash)
+              // FASE 3: Serangan Tengah
               scareEntity.setAttribute('position', '0 1.5 -12');
               playAttackSound();
               
-              // Melesat cepat dalam 500ms
               scareEntity.setAttribute('animation__dash', {
                 property: 'position',
-                to: '0 1 -0.2',
+                to: '0 0.8 -0.2',
                 dur: 500,
                 easing: 'easeInCubic'
               });
 
-              // Membesar menelan kamera
               scareEntity.setAttribute('animation__scale', {
                 property: 'scale',
-                to: '5 5 5',
+                to: '4 4 4',
                 dur: 500,
                 easing: 'easeInQuad'
               });
@@ -252,8 +286,8 @@
                 scheduleNextScare();
               }, 600); 
 
-            }, 400); // Jeda sebelum serangan utama
-          }, 400); // Jeda berkelebat
+            }, 450); 
+          }, 450); 
         }
 
         function scheduleNextScare() {
@@ -286,8 +320,8 @@
       <button id="scareToggle" class="active" title="Toggle Scare">👁️</button>
     </div>
 
-    <!-- Kabut Limbo -->
-    <a-scene fog="type: exponential; color: #0c0c0c; density: 0.06" background="color: #0c0c0c">
+    <!-- Warna fog diubah menjadi Dark Teal (#071313) sesuai gambar referensi -->
+    <a-scene fog="type: exponential; color: #071313; density: 0.065" background="color: #071313">
 
       <a-entity id="cameraRig" position="0 0 0">
         <a-camera position="0 1.6 0" look-controls="pointerLockEnabled: false">
@@ -296,31 +330,43 @@
                     raycaster="objects: .walkable"
                     position="0 0 -1"
                     geometry="primitive: ring; radiusInner: 0.015; radiusOuter: 0.025"
-                    material="color: #ffffff; shader: flat; opacity: 0.5">
+                    material="color: #ffffff; shader: flat; opacity: 0.4">
           </a-entity>
           
-          <!-- MODEL DEMENTOR DENGAN AURA AGAR TERLIHAT -->
-          <a-entity id="scareEntity" visible="false" position="0 1.5 -12">
-            <!-- Aura pucat (Glow samar) di belakang tubuh -->
-            <a-sphere radius="1.2" position="0 1.5 -0.2" color="#ffffff" material="shader: flat; transparent: true; opacity: 0.08"></a-sphere>
+          <!-- MODEL DEMENTOR + SHADOW TRAIL COMPONENT -->
+          <a-entity id="scareEntity" visible="false" position="0 1.5 -12" shadow-trail>
             
-            <!-- Jubah Inti -->
-            <a-cone radius-bottom="0.8" radius-top="0.2" height="3" color="#000000" material="shader: flat; transparent: true; opacity: 0.95"></a-cone>
-            <!-- Kepala -->
-            <a-sphere radius="0.35" position="0 1.5 0.1" color="#000000" material="shader: flat"></a-sphere>
-            <!-- Jubah Berkibar Belakang -->
-            <a-cylinder radius="0.7" height="2" position="0 0.5 0.2" rotation="-20 0 0" color="#050505" material="shader: flat; transparent: true; opacity: 0.8"></a-cylinder>
-            <!-- Lengan Menjulur -->
-            <a-box width="2.5" height="0.2" depth="1" position="0 0.5 0.3" rotation="10 0 0" color="#000000" material="shader: flat; transparent: true; opacity: 0.9"></a-box>
+            <!-- Kepala Dementor -->
+            <a-sphere radius="0.25" position="0 1.5 0.5" color="#000000" material="shader: flat"></a-sphere>
+            
+            <!-- Badan membungkuk (Melesat ke depan) -->
+            <a-cylinder radius="0.2" height="1.5" position="0 0.8 0.2" rotation="60 0 0" color="#000000" material="shader: flat"></a-cylinder>
+            
+            <!-- Lengan/Cakar menjulur ke depan -->
+            <a-box width="1.2" height="0.05" depth="0.8" position="0 1.0 0.6" rotation="20 0 0" color="#000000" material="shader: flat; transparent: true; opacity: 0.9"></a-box>
+            
+            <!-- EFEK JUBAH TERCABIK (Menggantikan partikel statis dengan juntaian panjang) -->
+            <a-entity position="0 0.5 -0.5">
+              <!-- Untaian 1 (Panjang) -->
+              <a-cone radius-bottom="0.01" radius-top="0.3" height="4.5" position="0 0 -1.5" rotation="85 0 0" color="#000000" material="shader: flat; transparent: true; opacity: 0.9"></a-cone>
+              <!-- Untaian 2 (Miring Kiri) -->
+              <a-cone radius-bottom="0.01" radius-top="0.2" height="5" position="-0.3 0.2 -1.8" rotation="80 15 0" color="#020505" material="shader: flat; transparent: true; opacity: 0.7"></a-cone>
+              <!-- Untaian 3 (Miring Kanan) -->
+              <a-cone radius-bottom="0.01" radius-top="0.2" height="3.8" position="0.3 0.5 -1.2" rotation="95 -10 0" color="#040808" material="shader: flat; transparent: true; opacity: 0.6"></a-cone>
+              <!-- Untaian 4 (Paling Belakang) -->
+              <a-cone radius-bottom="0.01" radius-top="0.15" height="6" position="0 -0.2 -2.5" rotation="88 0 0" color="#000000" material="shader: flat; transparent: true; opacity: 0.8"></a-cone>
+            </a-entity>
+
           </a-entity>
 
         </a-camera>
       </a-entity>
 
-      <a-light type="ambient" color="#111"></a-light>
-      <a-light type="point" color="#ffffff" intensity="0.6" position="0 15 0" distance="50"></a-light>
+      <a-light type="ambient" color="#1a2525"></a-light>
+      <!-- Menambahkan sedikit rona biru pucat pada point light -->
+      <a-light type="point" color="#88cccc" intensity="0.4" position="0 15 0" distance="50"></a-light>
 
-      <a-plane class="walkable" tap-to-move endless-ground rotation="-90 0 0" width="200" height="200" color="#050505" material="shader: flat"></a-plane>
+      <a-plane class="walkable" tap-to-move endless-ground rotation="-90 0 0" width="200" height="200" color="#030808" material="shader: flat"></a-plane>
       
       <a-entity endless-forest="treeCount: 200; radius: 50"></a-entity>
 
