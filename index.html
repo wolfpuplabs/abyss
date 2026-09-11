@@ -2,11 +2,10 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>Endless VR Limbo - Ghost Scare</title>
+    <title>Endless VR Limbo - Mobile Optimized</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     
     <style>
-      /* UI Toggle Icon */
       #ui-container {
         position: absolute;
         bottom: 30px;
@@ -26,7 +25,6 @@
         justify-content: center;
         transition: all 0.3s ease;
       }
-      /* Default state sekarang aktif (merah) */
       #scareToggle.active {
         border-color: #ff0000;
         box-shadow: 0 0 20px rgba(255, 0, 0, 0.6);
@@ -35,7 +33,6 @@
     </style>
 
     <script>
-      // 1. Sistem Tap to Move
       AFRAME.registerComponent('tap-to-move', {
         init: function () {
           var rig = document.querySelector('#cameraRig');
@@ -51,7 +48,6 @@
         }
       });
 
-      // 2. Sistem Endless Ground
       AFRAME.registerComponent('endless-ground', {
         tick: function () {
           var camPos = document.querySelector('#cameraRig').object3D.position;
@@ -59,7 +55,6 @@
         }
       });
 
-      // 3. Sistem Endless Forest
       AFRAME.registerComponent('endless-forest', {
         schema: { treeCount: {type: 'int', default: 250}, radius: {type: 'number', default: 50} },
         init: function () {
@@ -67,6 +62,7 @@
           this.cameraRig = document.querySelector('#cameraRig');
           for (let i = 0; i < this.data.treeCount; i++) {
             let tree = document.createElement('a-cylinder');
+            // Pohon tetap hitam pekat untuk kontras siluet
             tree.setAttribute('color', '#000000');
             tree.setAttribute('material', 'shader: flat; roughness: 1');
             let radius = Math.random() * 0.5 + 0.1;
@@ -100,18 +96,16 @@
         }
       });
 
-      // 4. Sistem Jump Scare (Default ON)
       document.addEventListener('DOMContentLoaded', () => {
         const toggleBtn = document.getElementById('scareToggle');
         const scareFace = document.getElementById('scareFace');
         
-        let scareActive = true; // Default nyala
+        let scareActive = true; 
         let scareTimer = null;
         
         const AudioContext = window.AudioContext || window.webkitAudioContext;
         const audioCtx = new AudioContext();
 
-        // Mengakali browser autoplay policy: Aktifkan audio context di klik pertama user
         document.body.addEventListener('click', () => {
           if (audioCtx.state === 'suspended') {
             audioCtx.resume();
@@ -119,7 +113,7 @@
         }, { once: true });
 
         function playScareSound() {
-          if (audioCtx.state === 'suspended') return; // Lewati jika user belum interaksi sama sekali
+          if (audioCtx.state === 'suspended') return; 
           
           const osc = audioCtx.createOscillator();
           const gainNode = audioCtx.createGain();
@@ -147,16 +141,14 @@
 
         function scheduleNextScare() {
           if (!scareActive) return;
-          const nextScareTime = Math.random() * 17000 + 8000; // Antara 8 - 25 detik
+          const nextScareTime = Math.random() * 17000 + 8000; 
           scareTimer = setTimeout(triggerScare, nextScareTime);
         }
 
-        // Mulai timer langsung saat web dimuat (karena default ON)
         scheduleNextScare();
 
         toggleBtn.addEventListener('click', () => {
           scareActive = !scareActive;
-          
           if (scareActive) {
             if (audioCtx.state === 'suspended') audioCtx.resume();
             toggleBtn.classList.add('active');
@@ -174,14 +166,14 @@
   </head>
   <body>
     
-    <!-- UI Toggle Icon - Default diset dengan class "active" dan ikon Mata Terbuka -->
     <div id="ui-container">
       <button id="scareToggle" class="active" title="Toggle Scare">👁️</button>
     </div>
 
-    <a-scene fog="type: exponential; color: #0a0a0a; density: 0.08" background="color: #0a0a0a">
+    <!-- Peningkatan visibilitas: Warna background dan fog dinaikkan menjadi #1e1e1e (abu-abu gelap) -->
+    <!-- Density sedikit diturunkan menjadi 0.06 agar pandangan lebih luas -->
+    <a-scene fog="type: exponential; color: #1e1e1e; density: 0.06" background="color: #1e1e1e">
 
-      <!-- Preload Asset -->
       <a-assets>
         <img id="ghostImg" src="image_2.png">
       </a-assets>
@@ -189,36 +181,33 @@
       <a-entity id="cameraRig" position="0 0 0">
         <a-camera position="0 1.6 0" look-controls="pointerLockEnabled: false">
           
-          <!-- Cursor -->
+          <!-- Cursor diperterang sedikit agar lebih mudah dilihat -->
           <a-entity cursor="rayOrigin: mouse;"
                     raycaster="objects: .walkable"
                     position="0 0 -1"
                     geometry="primitive: ring; radiusInner: 0.015; radiusOuter: 0.025"
-                    material="color: #ffffff; shader: flat; opacity: 0.5">
+                    material="color: #ffffff; shader: flat; opacity: 0.8">
           </a-entity>
           
-          <!-- Entitas Jump Scare -->
-          <!-- Modifikasi Material: color #b3b3b3 memberikan tint keabu-abuan agar warnanya redup menyatu dengan fog, opacity 0.75 membuatnya sedikit semi-transparan -->
           <a-image id="scareFace" 
                    src="#ghostImg" 
                    position="0 -0.2 -0.8" 
                    width="1.2" 
                    height="2" 
-                   material="shader: flat; transparent: true; opacity: 0.75; color: #b3b3b3"
+                   material="shader: flat; transparent: true; opacity: 0.85; color: #d0d0d0"
                    visible="false">
           </a-image>
 
         </a-camera>
       </a-entity>
 
-      <!-- Lighting -->
-      <a-light type="ambient" color="#111"></a-light>
+      <!-- Ambient Light dinaikkan menjadi #333 agar lantai lebih terlihat -->
+      <a-light type="ambient" color="#333"></a-light>
       <a-light type="point" color="#ffffff" intensity="0.6" position="0 15 0" distance="50"></a-light>
 
-      <!-- Lantai -->
-      <a-plane class="walkable" tap-to-move endless-ground rotation="-90 0 0" width="200" height="200" color="#050505" material="shader: flat"></a-plane>
+      <!-- Warna lantai dinaikkan menjadi #1a1a1a agar tidak menyatu total dengan fog -->
+      <a-plane class="walkable" tap-to-move endless-ground rotation="-90 0 0" width="200" height="200" color="#1a1a1a" material="shader: flat"></a-plane>
       
-      <!-- Hutan Endless -->
       <a-entity endless-forest="treeCount: 250; radius: 50"></a-entity>
 
     </a-scene>
