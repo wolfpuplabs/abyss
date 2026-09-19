@@ -101,7 +101,7 @@
         background: #000;
         z-index: 10001;
         overflow: hidden;
-        pointer-events: auto; /* Mencegah canvas A-Frame memblokir klik */
+        pointer-events: auto;
       }
 
       #cp-video {
@@ -110,6 +110,7 @@
         width: 100%; height: 100%;
         object-fit: cover;
         z-index: 1;
+        display: none; /* Disembunyikan sampai tombol di klik */
       }
 
       #cp-content {
@@ -120,10 +121,11 @@
         display: flex;
         flex-direction: column;
         align-items: center;
-        justify-content: space-between;
-        padding: 50px 20px;
+        justify-content: center; /* Diubah agar ke tengah */
+        gap: 50px; /* Jarak antara teks dan tombol */
+        padding: 20px;
         box-sizing: border-box;
-        background: rgba(0, 0, 0, 0.2); 
+        background: rgba(0, 0, 0, 0.9); 
         pointer-events: auto;
       }
 
@@ -134,6 +136,7 @@
         font-size: 36px;
         margin: 0;
         letter-spacing: 3px;
+        text-align: center;
       }
 
       /* Layar Death Overlay */
@@ -208,7 +211,6 @@
         window.bgmOsc = whiteNoise;
       }
 
-      // Suara Kematian (Synth Bass Drop)
       function playDeathSound() {
         if (audioCtx.state !== 'running') return;
         const osc = audioCtx.createOscillator();
@@ -323,7 +325,6 @@
           this.el.object3D.position.copy(this.threatPos);
           this.el.setAttribute('visible', 'true');
           
-          // Memainkan A-Frame Sound Attached (Howl Looping)
           if (this.el.components.sound) this.el.components.sound.playSound();
         },
         triggerCheckpoint: function() {
@@ -338,19 +339,12 @@
 
           setTimeout(() => {
             const cpOverlay = document.getElementById('checkpoint-overlay');
+            const cpContent = document.getElementById('cp-content');
             const cpVideo = document.getElementById('cp-video');
             
             cpOverlay.style.display = 'block';
-            
-            cpVideo.currentTime = 0;
-            cpVideo.muted = false; // Memastikan audio dari video menyala
-            
-            let playPromise = cpVideo.play();
-            if (playPromise !== undefined) {
-              playPromise.catch(error => {
-                console.log("Video autoplay caught:", error);
-              });
-            }
+            cpContent.style.display = 'flex'; // Tampilkan tombol
+            cpVideo.style.display = 'none';   // Sembunyikan video dulu
             
             fade.style.opacity = '0';
           }, 1000);
@@ -358,7 +352,6 @@
           this.speed += 0.5; 
         },
         resumeFromCheckpoint: function() {
-          // Cegah eksekusi ganda
           if(!window.isCheckpoint) return; 
 
           const fade = document.getElementById('fade-overlay');
@@ -425,7 +418,6 @@
           let moveDist = this.speed * (timeDelta / 1000);
           this.threatPos.addScaledVector(dir, moveDist);
           this.el.object3D.position.copy(this.threatPos);
-          
           this.el.object3D.lookAt(rigPos); 
         }
       });
@@ -437,6 +429,7 @@
         const restartBtn = document.getElementById('restart-btn');
         const cpResumeBtn = document.getElementById('resume-cp-btn');
         const cpVideo = document.getElementById('cp-video');
+        const cpContent = document.getElementById('cp-content');
         let bgmStarted = false;
 
         function initAudioAndStart() {
@@ -464,9 +457,20 @@
           initAudioAndStart();
         });
 
+        // Event saat tombol Checkpoint diklik: Putar Video
         cpResumeBtn.addEventListener('click', () => {
-          const threatEntity = document.querySelector('#threatEntity');
-          if (threatEntity) threatEntity.components['threat-system'].resumeFromCheckpoint();
+          cpContent.style.display = 'none'; // Sembunyikan UI tombol & teks
+          cpVideo.style.display = 'block';  // Tampilkan canvas video
+          
+          cpVideo.currentTime = 0;
+          cpVideo.muted = false; 
+          
+          cpVideo.play().catch(error => {
+            console.log("Video gagal diputar:", error);
+            // Fallback: Jika video tetap error, langsung resume game saja
+            const threatEntity = document.querySelector('#threatEntity');
+            if (threatEntity) threatEntity.components['threat-system'].resumeFromCheckpoint();
+          });
         });
 
         // Resume otomatis ketika video checkpoint selesai
@@ -502,10 +506,8 @@
   </head>
   <body>
     
-    <!-- Fade Overlay -->
     <div id="fade-overlay"></div>
 
-    <!-- UI Menu Awal -->
     <div id="start-menu">
       <div id="start-menu-box">
         <h1>SURVIVE THE LIMBO</h1>
@@ -514,34 +516,29 @@
       </div>
     </div>
 
-    <!-- HUD Timer Sederhana -->
     <div id="hud-timer">Time: <span id="timer-val">0.0</span>s</div>
 
-    <!-- UI Checkpoint Video Fullscreen -->
     <div id="checkpoint-overlay">
-      <!-- Muted dan loop dihilangkan -->
       <video id="cp-video" src="checkpoint.mp4" playsinline preload="auto" crossorigin="anonymous"></video>
       <div id="cp-content">
         <h2>CHECKPOINT REACHED</h2>
-        <button class="btn-glow" id="resume-cp-btn">RESUME RUNNING</button>
+        <!-- Teks tombol diubah agar jelas fungsinya memutar memori/video -->
+        <button class="btn-glow" id="resume-cp-btn">PLAY VIDEO</button>
       </div>
     </div>
 
-    <!-- UI Overlay Kematian -->
     <div id="death-overlay">
       <h1 id="death-text">YOU DIED</h1>
       <p id="final-time">You survived for: <span id="final-time-val" style="color: #ff0000; font-weight: bold;">0.0</span>s</p>
       <button class="btn-glow" style="background: #110000;" id="restart-btn">PLAY AGAIN</button>
     </div>
 
-    <!-- A-Frame Scene -->
     <a-scene fog="type: exponential; color: #071313; density: 0.065" background="color: #071313">
       <a-assets>
         <a-asset-item id="dementor-model" src="dementor.glb"></a-asset-item>
         <audio id="howl-sound" src="howl.mp3" preload="auto"></audio>
       </a-assets>
 
-      <!-- Player Camera -->
       <a-entity id="cameraRig" position="0 0 0">
         <a-camera position="0 1.6 0" look-controls="pointerLockEnabled: false">
           <a-entity cursor="rayOrigin: mouse;"
@@ -553,8 +550,6 @@
         </a-camera>
       </a-entity>
 
-      <!-- ENTITAS MUSUH: 3D Dementor menggunakan komponen Sound -->
-      <!-- Added: sound="src: #howl-sound; loop: true; autoplay: false; distanceModel: linear; maxDistance: 25; refDistance: 5; volume: 1.5" -->
       <a-entity id="threatEntity" visible="false" threat-system 
                 sound="src: #howl-sound; loop: true; autoplay: false; distanceModel: linear; maxDistance: 25; refDistance: 5; volume: 1.5">
         <a-entity animation="property: position; to: 0 0.5 0; dir: alternate; dur: 2200; loop: true; easing: easeInOutSine">
@@ -563,13 +558,11 @@
         </a-entity>
       </a-entity>
 
-      <!-- Lighting Environment Permanen -->
       <a-light type="ambient" color="#1a2525" intensity="0.3"></a-light>
       <a-light type="point" color="#88cccc" intensity="0.4" position="0 15 0" distance="50"></a-light>
 
       <a-plane class="walkable" tap-to-move endless-ground rotation="-90 0 0" width="200" height="200" color="#030808" material="shader: flat"></a-plane>
       <a-entity endless-forest="treeCount: 200; radius: 50"></a-entity>
-
     </a-scene>
   </body>
 </html>
