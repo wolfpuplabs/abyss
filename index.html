@@ -177,7 +177,7 @@
       const AudioContext = window.AudioContext || window.webkitAudioContext;
       const audioCtx = new AudioContext();
       
-      // BGM Ambience (Diperkecil Volumenya)
+      // BGM Ambience
       function playBGM() {
         if(window.bgmOsc) return;
         const bufferSize = audioCtx.sampleRate * 2; 
@@ -203,16 +203,6 @@
         window.bgmOsc = whiteNoise;
       }
 
-      // -- Suara Langkah Kaki Menggunakan file "walk.mp3" --
-      function playFootstep() {
-        const footstepAudio = document.getElementById('footstep-sound');
-        if (!footstepAudio) return;
-        
-        footstepAudio.volume = 1.0;
-        footstepAudio.currentTime = 0; 
-        footstepAudio.play().catch(e => console.log("Footstep play error:", e));
-      }
-
       // Suara Kematian
       function playDeathSound() {
         if (audioCtx.state !== 'running') return;
@@ -234,12 +224,10 @@
       window.isCheckpoint = false;
       window.gameTime = 0;
       window.nextCheckpoint = 120; 
-      window.isPlayerMoving = false; 
 
       AFRAME.registerComponent('tap-to-move', {
         init: function () {
           this.rig = document.querySelector('#cameraRig');
-          this.footstepTimer = 0;
           this.moveTimeout = null;
 
           this.el.addEventListener('click', (evt) => {
@@ -254,24 +242,18 @@
               easing: 'linear'
             });
 
-            window.isPlayerMoving = true;
-            
+            // Trik Volume Toggling iOS (Mainkan volume, bukan play/pause)
+            const walkAudio = document.getElementById('footstep-sound');
+            if (walkAudio) {
+              walkAudio.volume = 1.0;
+            }
+
             if (this.moveTimeout) clearTimeout(this.moveTimeout);
             this.moveTimeout = setTimeout(() => {
-              window.isPlayerMoving = false;
+              // Mute suara jalan saat berhenti, jangan di-pause
+              if (walkAudio) walkAudio.volume = 0;
             }, 1000);
           });
-        },
-        tick: function (time, timeDelta) {
-          if (window.isPlayerMoving && !window.isGameOver && !window.isCheckpoint) {
-            this.footstepTimer -= timeDelta;
-            if (this.footstepTimer <= 0) {
-              playFootstep();
-              this.footstepTimer = 400; // Trigger "walk.mp3" setiap 400ms saat lari
-            }
-          } else {
-            this.footstepTimer = 0; 
-          }
         }
       });
 
@@ -354,14 +336,14 @@
         triggerCheckpoint: function() {
           window.isCheckpoint = true;
           this.active = false; 
-          window.isPlayerMoving = false;
 
           this.cameraRig.removeAttribute('animation');
 
-          // Pause Suara Howl 3D
-          if (this.el.components.sound) {
-            this.el.components.sound.pauseSound();
-          }
+          // Mute semua suara SFX
+          const howlAudio = document.getElementById('howl-sound');
+          const walkAudio = document.getElementById('footstep-sound');
+          if (howlAudio) howlAudio.volume = 0;
+          if (walkAudio) walkAudio.volume = 0;
 
           const fade = document.getElementById('fade-overlay');
           fade.style.opacity = '1';
@@ -373,11 +355,11 @@
             cpOverlay.style.display = 'block';
             
             cpVideo.currentTime = 0;
-            cpVideo.load();
-            
             let playPromise = cpVideo.play();
             if (playPromise !== undefined) {
-              playPromise.catch(error => console.log("Video autoplay caught:", error));
+              playPromise.catch(error => {
+                console.log("Video autoplay caught:", error);
+              });
             }
             
             fade.style.opacity = '0';
@@ -400,11 +382,6 @@
             let rigPos = this.cameraRig.object3D.position;
             let dir = new THREE.Vector3().subVectors(this.threatPos, rigPos).normalize();
             this.threatPos.addScaledVector(dir, 12); 
-
-            // Play kembali suara Howl
-            if (this.el.components.sound) {
-              this.el.components.sound.playSound();
-            }
             
             fade.style.opacity = '0';
           }, 1000);
@@ -412,7 +389,6 @@
         triggerDeath: function () {
           window.isGameOver = true;
           this.active = false;
-          window.isPlayerMoving = false;
           
           let rigPos = this.cameraRig.object3D.position;
           this.el.object3D.position.set(rigPos.x, rigPos.y + 0.5, rigPos.z - 3.0);
@@ -420,10 +396,11 @@
 
           this.cameraRig.removeAttribute('animation');
 
-          // Matikan suara Howl
-          if (this.el.components.sound) {
-            this.el.components.sound.stopSound();
-          }
+          // Mute suara saat mati
+          const howlAudio = document.getElementById('howl-sound');
+          const walkAudio = document.getElementById('footstep-sound');
+          if (howlAudio) howlAudio.volume = 0;
+          if (walkAudio) walkAudio.volume = 0;
           
           document.getElementById('final-time-val').innerText = window.gameTime.toFixed(1);
           document.getElementById('death-overlay').style.display = 'flex';
@@ -460,35 +437,44 @@
           this.el.object3D.position.copy(this.threatPos);
           
           this.el.object3D.lookAt(rigPos); 
+
+          // --- LOGIKA VOLUME HOWL (Ghost Whisper) BERDASARKAN JARAK ---
+          // Audio sebenarnya terus "play" dari awal game, kita hanya memanipulasi volumenya
+          const howlAudio = document.getElementById('howl-sound');
+          if (howlAudio) {
+            if (distToPlayer < 25) {
+              let vol = Math.max(0, 1.0 - (distToPlayer / 25));
+              howlAudio.volume = vol;
+            } else {
+              howlAudio.volume = 0;
+            }
+          }
         }
       });
 
-      // INISIALISASI UI & FIX AUTOPLAY IPAD
+      // INISIALISASI UI & UNLOCK AUDIO UNTUK IPAD
       document.addEventListener('DOMContentLoaded', () => {
         const startBtn = document.getElementById('start-btn');
         const startMenu = document.getElementById('start-menu');
         const restartBtn = document.getElementById('restart-btn');
         const cpResumeBtn = document.getElementById('resume-cp-btn');
+        
+        const howlAudio = document.getElementById('howl-sound');
+        const walkAudio = document.getElementById('footstep-sound');
+        
         let bgmStarted = false;
 
-        startBtn.addEventListener('click', () => {
-          startMenu.style.display = 'none';
-          
+        function initAudioAndStart() {
           if (audioCtx.state === 'suspended') audioCtx.resume();
-
-          // 1. Force Unlock Audio Elements pada saat gesture click pertama kali untuk device Mobile/iPad
-          const howlAudio = document.getElementById('howl-sound');
-          const walkAudio = document.getElementById('footstep-sound');
           
-          if(howlAudio) {
-            howlAudio.play().catch(()=>{});
-            howlAudio.pause();
-            howlAudio.currentTime = 0;
+          // UNLOCK AUDIO: Mainkan langsung dan biarkan looping selamanya, tapi dalam kondisi Mute (Volume 0)
+          if (howlAudio) {
+            howlAudio.volume = 0;
+            howlAudio.play().catch(e => console.log("Unlock Howl Error:", e));
           }
-          if(walkAudio) {
-            walkAudio.play().catch(()=>{});
-            walkAudio.pause();
-            walkAudio.currentTime = 0;
+          if (walkAudio) {
+            walkAudio.volume = 0;
+            walkAudio.play().catch(e => console.log("Unlock Walk Error:", e));
           }
 
           if(!bgmStarted) {
@@ -499,26 +485,23 @@
             playBGM();
             bgmStarted = true;
           }
-
-          const threatEntity = document.querySelector('#threatEntity');
-          if (threatEntity) {
-            threatEntity.components['threat-system'].startGame();
-            // 2. Play 3D Spatial Sound secara synchronous dalam thread click
-            if (threatEntity.components.sound) {
-              threatEntity.components.sound.playSound();
+          
+          setTimeout(() => {
+            const threatEntity = document.querySelector('#threatEntity');
+            if (threatEntity && threatEntity.components['threat-system']) {
+              threatEntity.components['threat-system'].startGame();
             }
-          }
+          }, 500);
+        }
+
+        startBtn.addEventListener('click', () => {
+          startMenu.style.display = 'none';
+          initAudioAndStart();
         });
 
         cpResumeBtn.addEventListener('click', () => {
           const threatEntity = document.querySelector('#threatEntity');
-          if (threatEntity) {
-            threatEntity.components['threat-system'].resumeFromCheckpoint();
-            // 3. Play kembali suara Howl dari jeda video
-            if (threatEntity.components.sound) {
-              threatEntity.components.sound.playSound();
-            }
-          }
+          if (threatEntity) threatEntity.components['threat-system'].resumeFromCheckpoint();
         });
 
         restartBtn.addEventListener('click', () => {
@@ -526,7 +509,6 @@
           window.gameTime = 0;
           window.nextCheckpoint = 120;
           document.getElementById('timer-val').innerText = "0.0";
-          window.isPlayerMoving = false;
           
           const camRig = document.querySelector('#cameraRig');
           camRig.removeAttribute('animation');
@@ -538,13 +520,9 @@
             let angle = Math.random() * Math.PI * 2;
             let dist = 25;
             threatEntity.object3D.position.set(Math.cos(angle) * dist, 1.6, Math.sin(angle) * dist);
-
-            // Restart Howl
-            if (threatEntity.components.sound) {
-              threatEntity.components.sound.stopSound();
-              threatEntity.components.sound.playSound();
-            }
           }
+
+          initAudioAndStart();
         });
       });
     </script>
@@ -582,16 +560,15 @@
       <button class="btn-glow" style="background: #110000;" id="restart-btn">PLAY AGAIN</button>
     </div>
 
+    <!-- ELEMEN AUDIO (Loop Otomatis) -->
+    <!-- Nama file dipastikan sama dengan yang diunggah: ghost wishper.mp3 dan walk.mp3 -->
+    <audio id="howl-sound" src="ghost wishper.mp3" preload="auto" loop crossorigin="anonymous"></audio>
+    <audio id="footstep-sound" src="walk.mp3" preload="auto" loop crossorigin="anonymous"></audio>
+
     <!-- A-Frame Scene -->
     <a-scene fog="type: exponential; color: #071313; density: 0.065" background="color: #071313">
       <a-assets>
         <a-asset-item id="dementor-model" src="dementor.glb"></a-asset-item>
-        
-        <!-- AUDIO DEMENTOR HOWL -->
-        <audio id="howl-sound" src="ghost wishper.mp3" preload="auto" crossorigin="anonymous"></audio>
-        
-        <!-- AUDIO FOOTSTEP BARU -->
-        <audio id="footstep-sound" src="walk.mp3" preload="auto" crossorigin="anonymous"></audio>
       </a-assets>
 
       <!-- Player Camera -->
@@ -606,9 +583,8 @@
         </a-camera>
       </a-entity>
 
-      <!-- ENTITAS MUSUH: 3D Dementor dengan Spatial Sound 3D -->
-      <!-- 'distanceModel: exponential' = Suara akan perlahan membesar saat Dementor mendekat -->
-      <a-entity id="threatEntity" visible="false" threat-system sound="src: #howl-sound; autoplay: false; loop: true; volume: 8; distanceModel: exponential; refDistance: 3; maxDistance: 40; rolloffFactor: 2.5;">
+      <!-- ENTITAS MUSUH: 3D Dementor -->
+      <a-entity id="threatEntity" visible="false" threat-system>
         <a-entity animation="property: position; to: 0 0.5 0; dir: alternate; dur: 2200; loop: true; easing: easeInOutSine">
           <a-gltf-model src="#dementor-model" position="0 0 0" scale="4.5 4.5 4.5"></a-gltf-model>
           <a-light type="point" color="#ff0000" intensity="2.0" distance="10" position="0 1.5 0.5"></a-light>
