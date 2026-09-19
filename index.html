@@ -323,7 +323,7 @@
       window.gameScore = 0;
       window.nextCheckpoint = 120; 
 
-      // -- SISTEM STAMINA & DOUBLE TAP SPRINT -- //
+      // -- SISTEM STAMINA & SPEED LEBIH CEPAT DAN AWET -- //
       window.stamina = 100;
       window.isSprinting = false;
       window.staminaExhausted = false;
@@ -340,13 +340,13 @@
             let currentTime = new Date().getTime();
             let tapLength = currentTime - this.lastTapTime;
             
-            // Cek jika jarak antar tap kurang dari 300ms (Double Tap)
+            // Double Tap Detection
             if (tapLength < 300 && tapLength > 0) {
-              if (!window.staminaExhausted && window.stamina > 10) {
+              if (!window.staminaExhausted && window.stamina > 5) {
                 window.isSprinting = true;
               }
             } else {
-              window.isSprinting = false; // Single tap = Jalan biasa
+              window.isSprinting = false; // Single tap = Walk
             }
             this.lastTapTime = currentTime;
 
@@ -359,7 +359,8 @@
           let currentPos = this.rig.object3D.position;
           let dist = Math.sqrt(Math.pow(this.targetPoint.x - currentPos.x, 2) + Math.pow(this.targetPoint.z - currentPos.z, 2));
           
-          let speed = (window.isSprinting && !window.staminaExhausted) ? 12 : 6; 
+          // Kecepatan ditingkatkan: Walk = 7, Sprint = 22 (Sangat Cepat)
+          let speed = (window.isSprinting && !window.staminaExhausted) ? 22 : 7; 
           let duration = (dist / speed) * 1000;
 
           this.rig.setAttribute('animation', {
@@ -376,7 +377,7 @@
           let staminaBar = document.getElementById('stamina-bar');
 
           if (window.isSprinting && !window.staminaExhausted) {
-            window.stamina -= 30 * deltaSec; 
+            window.stamina -= 12 * deltaSec; // Stamina terpakai jauh lebih hemat (Lari lebih lama)
             if (this.targetPoint) this.moveToTarget();
 
             if (window.stamina <= 0) {
@@ -386,7 +387,7 @@
               if (staminaBar) staminaBar.style.background = '#ff0000';
             }
           } else {
-            window.stamina += 18 * deltaSec; 
+            window.stamina += 25 * deltaSec; // Regenerasi stamina lebih cepat
             if (window.stamina >= 100) {
               window.stamina = 100;
               window.staminaExhausted = false;
