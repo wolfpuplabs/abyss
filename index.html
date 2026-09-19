@@ -61,6 +61,7 @@
         text-transform: uppercase;
         box-shadow: 0 0 15px rgba(255, 0, 0, 0.5), inset 0 0 10px rgba(255, 0, 0, 0.3);
         transition: 0.3s;
+        pointer-events: auto;
       }
       .btn-glow:hover { 
         background: rgba(255, 0, 0, 0.15); 
@@ -100,6 +101,7 @@
         background: #000;
         z-index: 10001;
         overflow: hidden;
+        pointer-events: auto; /* Mencegah canvas A-Frame memblokir klik */
       }
 
       #cp-video {
@@ -122,6 +124,7 @@
         padding: 50px 20px;
         box-sizing: border-box;
         background: rgba(0, 0, 0, 0.2); 
+        pointer-events: auto;
       }
 
       #cp-content h2 {
@@ -203,21 +206,6 @@
         whisperGain.connect(audioCtx.destination);
         whiteNoise.start(); 
         window.bgmOsc = whiteNoise;
-      }
-
-      // -- Suara Ghostly Howl Baru (Berdasarkan Audio Eksternal) --
-      function playScreech(volumeMult) {
-        const howlAudio = document.getElementById('howl-sound');
-        if (!howlAudio) return;
-        
-        // Clone node agar suara bisa diputar tumpang tindih jika ter-trigger berdekatan
-        let sound = howlAudio.cloneNode();
-        
-        // Atur volume (0.0 sampai 1.0)
-        sound.volume = Math.min(Math.max(volumeMult, 0), 1);
-        
-        // Play audio dan tangkap error agar tidak crash
-        sound.play().catch(e => console.log("Audio play error:", e));
       }
 
       // Suara Kematian (Synth Bass Drop)
@@ -313,7 +301,6 @@
           this.active = false;
           this.baseSpeed = 4.5;
           this.speed = this.baseSpeed; 
-          this.screechTimer = 0;
           this.threatPos = new THREE.Vector3();
         },
         startGame: function () {
@@ -335,12 +322,16 @@
           
           this.el.object3D.position.copy(this.threatPos);
           this.el.setAttribute('visible', 'true');
+          
+          // Memainkan A-Frame Sound Attached (Howl Looping)
+          if (this.el.components.sound) this.el.components.sound.playSound();
         },
         triggerCheckpoint: function() {
           window.isCheckpoint = true;
           this.active = false; 
 
           this.cameraRig.removeAttribute('animation');
+          if (this.el.components.sound) this.el.components.sound.pauseSound();
 
           const fade = document.getElementById('fade-overlay');
           fade.style.opacity = '1';
@@ -352,7 +343,7 @@
             cpOverlay.style.display = 'block';
             
             cpVideo.currentTime = 0;
-            cpVideo.load();
+            cpVideo.muted = false; // Memastikan audio dari video menyala
             
             let playPromise = cpVideo.play();
             if (playPromise !== undefined) {
@@ -367,6 +358,9 @@
           this.speed += 0.5; 
         },
         resumeFromCheckpoint: function() {
+          // Cegah eksekusi ganda
+          if(!window.isCheckpoint) return; 
+
           const fade = document.getElementById('fade-overlay');
           fade.style.opacity = '1';
 
@@ -382,6 +376,7 @@
             let dir = new THREE.Vector3().subVectors(this.threatPos, rigPos).normalize();
             this.threatPos.addScaledVector(dir, 12); 
             
+            if (this.el.components.sound) this.el.components.sound.playSound();
             fade.style.opacity = '0';
           }, 1000);
         },
@@ -389,6 +384,8 @@
           window.isGameOver = true;
           this.active = false;
           
+          if (this.el.components.sound) this.el.components.sound.stopSound();
+
           let rigPos = this.cameraRig.object3D.position;
           this.el.object3D.position.set(rigPos.x, rigPos.y + 0.5, rigPos.z - 3.0);
           this.el.object3D.lookAt(rigPos);
@@ -430,15 +427,6 @@
           this.el.object3D.position.copy(this.threatPos);
           
           this.el.object3D.lookAt(rigPos); 
-
-          this.screechTimer -= timeDelta;
-          if (this.screechTimer <= 0) {
-            let vol = Math.max(0, 1.0 - (distToPlayer / 30));
-            playScreech(vol);
-            
-            // Jeda suara diset antara 5 - 8 detik karena audio lumayan panjang
-            this.screechTimer = 5000 + (Math.random() * 3000);
-          }
         }
       });
 
@@ -448,6 +436,7 @@
         const startMenu = document.getElementById('start-menu');
         const restartBtn = document.getElementById('restart-btn');
         const cpResumeBtn = document.getElementById('resume-cp-btn');
+        const cpVideo = document.getElementById('cp-video');
         let bgmStarted = false;
 
         function initAudioAndStart() {
@@ -478,6 +467,14 @@
         cpResumeBtn.addEventListener('click', () => {
           const threatEntity = document.querySelector('#threatEntity');
           if (threatEntity) threatEntity.components['threat-system'].resumeFromCheckpoint();
+        });
+
+        // Resume otomatis ketika video checkpoint selesai
+        cpVideo.addEventListener('ended', () => {
+          const threatEntity = document.querySelector('#threatEntity');
+          if (threatEntity && window.isCheckpoint) {
+            threatEntity.components['threat-system'].resumeFromCheckpoint();
+          }
         });
 
         restartBtn.addEventListener('click', () => {
@@ -522,7 +519,8 @@
 
     <!-- UI Checkpoint Video Fullscreen -->
     <div id="checkpoint-overlay">
-      <video id="cp-video" src="checkpoint.mp4" loop playsinline muted preload="auto" crossorigin="anonymous"></video>
+      <!-- Muted dan loop dihilangkan -->
+      <video id="cp-video" src="checkpoint.mp4" playsinline preload="auto" crossorigin="anonymous"></video>
       <div id="cp-content">
         <h2>CHECKPOINT REACHED</h2>
         <button class="btn-glow" id="resume-cp-btn">RESUME RUNNING</button>
@@ -539,10 +537,7 @@
     <!-- A-Frame Scene -->
     <a-scene fog="type: exponential; color: #071313; density: 0.065" background="color: #071313">
       <a-assets>
-        <!-- Pastikan nama file Anda sudah sesuai dengan ini -->
         <a-asset-item id="dementor-model" src="dementor.glb"></a-asset-item>
-        
-        <!-- AUDIO HOWL DARI REFERENSI ANDA -->
         <audio id="howl-sound" src="howl.mp3" preload="auto"></audio>
       </a-assets>
 
@@ -558,8 +553,10 @@
         </a-camera>
       </a-entity>
 
-      <!-- ENTITAS MUSUH: 3D Dementor -->
-      <a-entity id="threatEntity" visible="false" threat-system>
+      <!-- ENTITAS MUSUH: 3D Dementor menggunakan komponen Sound -->
+      <!-- Added: sound="src: #howl-sound; loop: true; autoplay: false; distanceModel: linear; maxDistance: 25; refDistance: 5; volume: 1.5" -->
+      <a-entity id="threatEntity" visible="false" threat-system 
+                sound="src: #howl-sound; loop: true; autoplay: false; distanceModel: linear; maxDistance: 25; refDistance: 5; volume: 1.5">
         <a-entity animation="property: position; to: 0 0.5 0; dir: alternate; dur: 2200; loop: true; easing: easeInOutSine">
           <a-gltf-model src="#dementor-model" position="0 0 0" scale="4.5 4.5 4.5"></a-gltf-model>
           <a-light type="point" color="#ff0000" intensity="2.0" distance="10" position="0 1.5 0.5"></a-light>
