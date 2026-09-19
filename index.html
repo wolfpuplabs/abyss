@@ -198,7 +198,7 @@
         filter.frequency.value = 400; 
 
         const whisperGain = audioCtx.createGain();
-        whisperGain.gain.value = 0.05; // BGM sangat kecil
+        whisperGain.gain.value = 0.05; 
 
         whiteNoise.connect(filter);
         filter.connect(whisperGain);
@@ -210,7 +210,7 @@
       // -- Suara Langkah Kaki (Footstep) Daun/Tanah --
       function playFootstep() {
         if (audioCtx.state !== 'running') return;
-        const bufferSize = audioCtx.sampleRate * 0.15; // 150ms noise
+        const bufferSize = audioCtx.sampleRate * 0.15; 
         const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
         const output = noiseBuffer.getChannelData(0);
         for (let i = 0; i < bufferSize; i++) { output[i] = Math.random() * 2 - 1; }
@@ -220,7 +220,7 @@
 
         const filter = audioCtx.createBiquadFilter();
         filter.type = 'bandpass';
-        filter.frequency.value = 900; // Frekuensi menengah-tinggi (seperti daun kering)
+        filter.frequency.value = 900; 
 
         const gain = audioCtx.createGain();
         gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
@@ -230,16 +230,6 @@
         filter.connect(gain);
         gain.connect(audioCtx.destination);
         noiseSource.start();
-      }
-
-      // -- Suara Ghostly Howl (Dari Audio MP3) --
-      function playScreech(volumeMult) {
-        const howlAudio = document.getElementById('howl-sound');
-        if (!howlAudio) return;
-        
-        howlAudio.volume = Math.min(Math.max(volumeMult, 0), 1);
-        howlAudio.currentTime = 0; 
-        howlAudio.play().catch(e => console.log("Audio play error:", e));
       }
 
       // Suara Kematian
@@ -262,8 +252,8 @@
       window.isGameOver = true; 
       window.isCheckpoint = false;
       window.gameTime = 0;
-      window.nextCheckpoint = 120; // Checkpoint di 120 detik
-      window.isPlayerMoving = false; // State untuk mendeteksi pemain sedang lari
+      window.nextCheckpoint = 120; 
+      window.isPlayerMoving = false; 
 
       AFRAME.registerComponent('tap-to-move', {
         init: function () {
@@ -276,7 +266,6 @@
             
             var point = evt.detail.intersection.point;
             
-            // Animasi jalan 1 detik
             this.rig.setAttribute('animation', {
               property: 'position',
               to: point.x + ' 0 ' + point.z,
@@ -284,7 +273,6 @@
               easing: 'linear'
             });
 
-            // Set state bahwa pemain sedang berlari selama 1 detik
             window.isPlayerMoving = true;
             if (this.moveTimeout) clearTimeout(this.moveTimeout);
             this.moveTimeout = setTimeout(() => {
@@ -293,15 +281,14 @@
           });
         },
         tick: function (time, timeDelta) {
-          // Loop untuk memutar suara footsteps jika pemain sedang lari
           if (window.isPlayerMoving && !window.isGameOver && !window.isCheckpoint) {
             this.footstepTimer -= timeDelta;
             if (this.footstepTimer <= 0) {
               playFootstep();
-              this.footstepTimer = 330; // Kecepatan langkah kaki (3 langkah per detik)
+              this.footstepTimer = 330; 
             }
           } else {
-            this.footstepTimer = 0; // Reset saat berhenti
+            this.footstepTimer = 0; 
           }
         }
       });
@@ -388,7 +375,7 @@
           this.active = false; 
 
           this.cameraRig.removeAttribute('animation');
-          window.isPlayerMoving = false; // Paksa berhenti melangkah
+          window.isPlayerMoving = false; 
 
           const fade = document.getElementById('fade-overlay');
           fade.style.opacity = '1';
@@ -482,11 +469,14 @@
 
           this.screechTimer -= timeDelta;
           
-          if (distToPlayer < 15 && this.screechTimer <= 0) {
-            let vol = Math.max(0.1, 1.0 - (distToPlayer / 15));
-            playScreech(vol);
-            
-            this.screechTimer = 4500 + (Math.random() * 2000);
+          // Suara Howl diputar otomatis oleh komponen sound bawaan A-Frame.
+          // Trigger jika Dementor mendekat (Jarak < 18 meter)
+          if (distToPlayer < 18 && this.screechTimer <= 0) {
+            if (this.el.components.sound) {
+              this.el.components.sound.stopSound();
+              this.el.components.sound.playSound();
+            }
+            this.screechTimer = 5000 + (Math.random() * 3000); // 5 sampai 8 detik
           }
         }
       });
@@ -590,7 +580,9 @@
     <a-scene fog="type: exponential; color: #071313; density: 0.065" background="color: #071313">
       <a-assets>
         <a-asset-item id="dementor-model" src="dementor.glb"></a-asset-item>
-        <audio id="howl-sound" src="ghost wishper.mp3" preload="auto"></audio>
+        
+        <!-- AUDIO HOWL DARI REFERENSI. URL Spacing encoded (%20) -->
+        <audio id="howl-sound" src="ghost%20wishper.mp3" preload="auto"></audio>
       </a-assets>
 
       <!-- Player Camera -->
@@ -605,8 +597,9 @@
         </a-camera>
       </a-entity>
 
-      <!-- ENTITAS MUSUH: 3D Dementor -->
-      <a-entity id="threatEntity" visible="false" threat-system>
+      <!-- ENTITAS MUSUH: 3D Dementor dengan Spatial Sound -->
+      <!-- Menempelkan sistem suara 3D di entitas ini. Max distance = 25 agar fade suaranya halus -->
+      <a-entity id="threatEntity" visible="false" threat-system sound="src: #howl-sound; autoplay: false; loop: false; volume: 5; refDistance: 2; maxDistance: 25;">
         <a-entity animation="property: position; to: 0 0.5 0; dir: alternate; dur: 2200; loop: true; easing: easeInOutSine">
           <a-gltf-model src="#dementor-model" position="0 0 0" scale="4.5 4.5 4.5"></a-gltf-model>
           <a-light type="point" color="#ff0000" intensity="2.0" distance="10" position="0 1.5 0.5"></a-light>
