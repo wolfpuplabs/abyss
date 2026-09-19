@@ -145,7 +145,7 @@
         color: #ffaa44;
         font-family: 'Courier New', monospace;
         text-shadow: 0 0 20px #ff6600, 0 0 10px #000;
-        font-size: 36px;
+        font-size: 32px;
         margin: 0;
         letter-spacing: 3px;
         text-align: center;
@@ -315,8 +315,9 @@
         }
       });
 
+      // -- RARE COLLECTIBLE WISP SYSTEM -- //
       AFRAME.registerComponent('wisp-system', {
-        schema: { count: {type: 'int', default: 15}, radius: {type: 'number', default: 40} },
+        schema: { count: {type: 'int', default: 3}, radius: {type: 'number', default: 70} }, // Wisp lebih langka (hanya 3) dan tersebar lebih jauh
         init: function () {
           this.wisps = [];
           this.cameraRig = document.querySelector('#cameraRig');
@@ -324,15 +325,15 @@
           
           for (let i = 0; i < this.data.count; i++) {
             let wisp = document.createElement('a-sphere');
-            wisp.setAttribute('radius', '0.3');
+            wisp.setAttribute('radius', '0.35');
             wisp.setAttribute('color', '#44aaff');
-            wisp.setAttribute('material', 'shader: flat; transparent: true; opacity: 0.8');
+            wisp.setAttribute('material', 'shader: flat; transparent: true; opacity: 0.9');
             
             let light = document.createElement('a-light');
             light.setAttribute('type', 'point');
             light.setAttribute('color', '#44aaff');
-            light.setAttribute('intensity', '1');
-            light.setAttribute('distance', '3');
+            light.setAttribute('intensity', '1.5');
+            light.setAttribute('distance', '4');
             wisp.appendChild(light);
 
             this.repositionWisp(wisp);
@@ -357,12 +358,11 @@
               
               if (this.threat && this.threat.components['threat-system']) {
                  let sys = this.threat.components['threat-system'];
-                 let currentSpeed = sys.speed;
                  sys.speed = Math.max(sys.baseSpeed - 2, 1); 
                  setTimeout(() => { sys.speed = sys.baseSpeed; }, 3000);
               }
             }
-            else if (dist > this.data.radius + 10) {
+            else if (dist > this.data.radius + 15) {
               this.repositionWisp(wisp);
             }
           }
@@ -370,7 +370,7 @@
         repositionWisp: function (wisp) {
           let camPos = this.cameraRig.object3D.position;
           let angle = (Math.random() * Math.PI) - (Math.PI / 2); 
-          let dist = 15 + Math.random() * (this.data.radius - 15);
+          let dist = 25 + Math.random() * (this.data.radius - 25); // Muncul cukup jauh
           
           let tx = camPos.x + Math.cos(angle) * dist;
           let tz = camPos.z + Math.sin(angle) * dist;
@@ -613,13 +613,15 @@
     </div>
 
     <div id="hud-timer">Time: <span id="timer-val">0.0</span>s</div>
-    <div id="hud-score">Souls: <span id="score-val">0</span></div>
+    <!-- Ubah UI Souls -> Heirlooms -->
+    <div id="hud-score">Heirlooms: <span id="score-val">0</span></div>
 
     <div id="checkpoint-overlay">
       <video id="cp-video" src="checkpoint.mp4" playsinline preload="auto" crossorigin="anonymous"></video>
       <div id="cp-content">
-        <h2>CHECKPOINT REACHED</h2>
-        <button class="btn-glow" id="resume-cp-btn">PLAY VIDEO</button>
+        <!-- Ubah Teks Checkpoint & Tombol -->
+        <h2>SEEMS IT'S SAFE FOR A WHILE</h2>
+        <button class="btn-glow" id="resume-cp-btn">REST</button>
       </div>
     </div>
 
