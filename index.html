@@ -68,7 +68,7 @@
         box-shadow: 0 0 25px rgba(255, 0, 0, 0.8), inset 0 0 20px rgba(255, 0, 0, 0.6);
       }
 
-      /* Timer HUD Sederhana */
+      /* HUD Elements */
       #hud-timer {
         display: none;
         position: absolute;
@@ -81,16 +81,37 @@
         text-shadow: 2px 2px 5px #000, 0 0 10px #ff0000;
       }
 
-      /* Score HUD Sederhana */
       #hud-score {
         display: none;
         position: absolute;
         top: 20px; right: 20px;
-        color: #44aaff;
+        color: #00ffff;
         font-family: monospace;
         font-size: 20px;
         z-index: 9998;
-        text-shadow: 2px 2px 5px #000, 0 0 10px #0055ff;
+        text-shadow: 2px 2px 5px #000, 0 0 10px #00ffff;
+      }
+
+      /* Tombol Shield Skill */
+      #shield-btn {
+        display: none;
+        position: absolute;
+        bottom: 30px; left: 50%;
+        transform: translateX(-50%);
+        z-index: 9998;
+        border-color: #00ffff;
+        color: #00ffff;
+        box-shadow: 0 0 15px rgba(0, 255, 255, 0.6), inset 0 0 10px rgba(0, 255, 255, 0.3);
+        animation: pulseBtn 1s infinite alternate;
+      }
+      #shield-btn:hover {
+        background: rgba(0, 255, 255, 0.2);
+        box-shadow: 0 0 25px rgba(0, 255, 255, 0.9), inset 0 0 20px rgba(0, 255, 255, 0.6);
+      }
+
+      @keyframes pulseBtn {
+        from { transform: translateX(-50%) scale(1); }
+        to { transform: translateX(-50%) scale(1.05); }
       }
 
       /* Black Fade Overlay Transisi */
@@ -245,10 +266,53 @@
         osc.stop(audioCtx.currentTime + 2);
       }
 
+      // Suara Ledakan Listrik/Blitz Shield
+      function playElectricShieldSFX() {
+        if (audioCtx.state !== 'running') return;
+        
+        // Noise Burst
+        const bufferSize = audioCtx.sampleRate * 0.5;
+        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) { data[i] = Math.random() * 2 - 1; }
+        
+        const noise = audioCtx.createBufferSource();
+        noise.buffer = buffer;
+        
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.setValueAtTime(3000, audioCtx.currentTime);
+        filter.frequency.exponentialRampToValueAtTime(200, audioCtx.currentTime + 0.5);
+        
+        const gain = audioCtx.createGain();
+        gain.gain.setValueAtTime(2.0, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+        
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(audioCtx.destination);
+        noise.start();
+
+        // High Electric Pitch Sweep
+        const osc = audioCtx.createOscillator();
+        const oscGain = audioCtx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(1200, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(80, audioCtx.currentTime + 0.6);
+        oscGain.gain.setValueAtTime(1.5, audioCtx.currentTime);
+        oscGain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.6);
+        
+        osc.connect(oscGain);
+        oscGain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.6);
+      }
+
       window.isGameOver = true; 
       window.isCheckpoint = false;
       window.gameTime = 0;
       window.gameScore = 0;
+      window.shieldCharge = 0;
       window.nextCheckpoint = 120; 
 
       AFRAME.registerComponent('tap-to-move', {
@@ -315,25 +379,38 @@
         }
       });
 
-      // -- RARE COLLECTIBLE WISP SYSTEM -- //
+      // -- NEON GLOW RARE HEIRLOOMS SYSTEM -- //
       AFRAME.registerComponent('wisp-system', {
-        schema: { count: {type: 'int', default: 3}, radius: {type: 'number', default: 70} }, // Wisp lebih langka (hanya 3) dan tersebar lebih jauh
+        schema: { count: {type: 'int', default: 3}, radius: {type: 'number', default: 60} }, 
         init: function () {
           this.wisps = [];
           this.cameraRig = document.querySelector('#cameraRig');
-          this.threat = document.querySelector('#threatEntity');
           
           for (let i = 0; i < this.data.count; i++) {
-            let wisp = document.createElement('a-sphere');
-            wisp.setAttribute('radius', '0.35');
-            wisp.setAttribute('color', '#44aaff');
-            wisp.setAttribute('material', 'shader: flat; transparent: true; opacity: 0.9');
+            // Entitas Induk Wisp
+            let wisp = document.createElement('a-entity');
+
+            // Sphere Dalam (Inti Neon Cemerlang)
+            let core = document.createElement('a-sphere');
+            core.setAttribute('radius', '0.25');
+            core.setAttribute('color', '#ffffff');
+            core.setAttribute('material', 'shader: flat; emissive: #00ffff; emissiveIntensity: 2');
+            wisp.appendChild(core);
+
+            // Sphere Luar (Aura Neon Glow Transparan)
+            let aura = document.createElement('a-sphere');
+            aura.setAttribute('radius', '0.5');
+            aura.setAttribute('color', '#00ffff');
+            aura.setAttribute('material', 'shader: flat; transparent: true; opacity: 0.4');
+            aura.setAttribute('animation', 'property: scale; to: 1.3 1.3 1.3; dir: alternate; dur: 800; loop: true; easing: easeInOutSine');
+            wisp.appendChild(aura);
             
+            // Light Source Neon Cyan
             let light = document.createElement('a-light');
             light.setAttribute('type', 'point');
-            light.setAttribute('color', '#44aaff');
-            light.setAttribute('intensity', '1.5');
-            light.setAttribute('distance', '4');
+            light.setAttribute('color', '#00ffff');
+            light.setAttribute('intensity', '3.0');
+            light.setAttribute('distance', '8');
             wisp.appendChild(light);
 
             this.repositionWisp(wisp);
@@ -350,17 +427,17 @@
             let wispPos = wisp.object3D.position;
             let dist = camPos.distanceTo(wispPos);
             
-            if (dist < 2.0) {
+            if (dist < 2.2) {
               window.gameScore += 1;
+              window.shieldCharge += 1;
               document.getElementById('score-val').innerText = window.gameScore;
               
-              this.repositionWisp(wisp);
-              
-              if (this.threat && this.threat.components['threat-system']) {
-                 let sys = this.threat.components['threat-system'];
-                 sys.speed = Math.max(sys.baseSpeed - 2, 1); 
-                 setTimeout(() => { sys.speed = sys.baseSpeed; }, 3000);
+              // Cek jika sudah mencapai 5 Heirlooms untuk mengaktifkan tombol Shield
+              if (window.shieldCharge >= 5) {
+                document.getElementById('shield-btn').style.display = 'block';
               }
+
+              this.repositionWisp(wisp);
             }
             else if (dist > this.data.radius + 15) {
               this.repositionWisp(wisp);
@@ -370,7 +447,7 @@
         repositionWisp: function (wisp) {
           let camPos = this.cameraRig.object3D.position;
           let angle = (Math.random() * Math.PI) - (Math.PI / 2); 
-          let dist = 25 + Math.random() * (this.data.radius - 25); // Muncul cukup jauh
+          let dist = 20 + Math.random() * (this.data.radius - 20); 
           
           let tx = camPos.x + Math.cos(angle) * dist;
           let tz = camPos.z + Math.sin(angle) * dist;
@@ -387,6 +464,69 @@
         }
       });
 
+      // -- SISTEM BAYANGAN TERBANG CEPAT (RANDOM APPARITION) -- //
+      AFRAME.registerComponent('apparition-system', {
+        init: function () {
+          this.cameraRig = document.querySelector('#cameraRig');
+          this.timer = 0;
+          this.resetTimer();
+
+          // Buat Model Bayangan
+          this.ghost = document.createElement('a-entity');
+          let body = document.createElement('a-cone');
+          body.setAttribute('radius-bottom', '0.6');
+          body.setAttribute('radius-top', '0.01');
+          body.setAttribute('height', '2.5');
+          body.setAttribute('color', '#000000');
+          body.setAttribute('material', 'shader: flat; transparent: true; opacity: 0.75');
+          body.setAttribute('rotation', '90 0 0');
+          this.ghost.appendChild(body);
+
+          this.ghost.setAttribute('visible', 'false');
+          this.el.sceneEl.appendChild(this.ghost);
+        },
+        resetTimer: function () {
+          // Muncul acak tiap 8 - 18 detik
+          this.timer = 8000 + Math.random() * 10000;
+        },
+        tick: function (time, timeDelta) {
+          if (window.isGameOver || window.isCheckpoint) return;
+
+          this.timer -= timeDelta;
+          if (this.timer <= 0) {
+            this.triggerApparition();
+            this.resetTimer();
+          }
+        },
+        triggerApparition: function () {
+          let camPos = this.cameraRig.object3D.position;
+          
+          // Posisi awal di kiri/kanan depan kamera
+          let side = Math.random() < 0.5 ? -1 : 1;
+          let startX = camPos.x + (side * 20);
+          let startZ = camPos.z - (15 + Math.random() * 15);
+          let endX = camPos.x + (-side * 25);
+          let endZ = startZ + (Math.random() * 10 - 5);
+
+          this.ghost.object3D.position.set(startX, 2.5 + Math.random() * 2, startZ);
+          this.ghost.object3D.lookAt(endX, 2.5, endZ);
+          this.ghost.setAttribute('visible', 'true');
+
+          // Melintas sangat cepat dalam 800ms
+          this.ghost.setAttribute('animation', {
+            property: 'position',
+            to: `${endX} ${1.5 + Math.random() * 2} ${endZ}`,
+            dur: 800,
+            easing: 'easeInQuad'
+          });
+
+          setTimeout(() => {
+            this.ghost.setAttribute('visible', 'false');
+            this.ghost.removeAttribute('animation');
+          }, 850);
+        }
+      });
+
       AFRAME.registerComponent('threat-system', {
         init: function () {
           this.cameraRig = document.querySelector('#cameraRig');
@@ -394,14 +534,18 @@
           this.baseSpeed = 4.5;
           this.speed = this.baseSpeed; 
           this.threatPos = new THREE.Vector3();
+          this.isStunned = false;
         },
         startGame: function () {
           this.active = true;
           window.isGameOver = false;
           window.isCheckpoint = false;
+          window.shieldCharge = 0;
+          this.isStunned = false;
           
           document.getElementById('hud-timer').style.display = 'block';
           document.getElementById('hud-score').style.display = 'block';
+          document.getElementById('shield-btn').style.display = 'none';
 
           let rigPos = this.cameraRig.object3D.position;
           let angle = Math.random() * Math.PI * 2;
@@ -417,6 +561,47 @@
           this.el.setAttribute('visible', 'true');
           
           if (this.el.components.sound) this.el.components.sound.playSound();
+        },
+        triggerShield: function () {
+          if (window.shieldCharge < 5 || window.isGameOver || window.isCheckpoint) return;
+
+          window.shieldCharge -= 5;
+          if (window.shieldCharge < 5) {
+            document.getElementById('shield-btn').style.display = 'none';
+          }
+
+          playElectricShieldSFX();
+
+          // Tampilkan Efek Visual Dome Transparan Ledakan Blitz
+          let rigPos = this.cameraRig.object3D.position;
+          let dome = document.createElement('a-sphere');
+          dome.setAttribute('position', `${rigPos.x} 1.6 ${rigPos.z}`);
+          dome.setAttribute('radius', '1');
+          dome.setAttribute('color', '#00ffff');
+          dome.setAttribute('material', 'shader: flat; transparent: true; opacity: 0.8; side: double');
+          dome.setAttribute('animation__scale', 'property: radius; to: 35; dur: 400; easing: easeOutQuad');
+          dome.setAttribute('animation__fade', 'property: material.opacity; to: 0; dur: 450; easing: easeInExpo');
+
+          let light = document.createElement('a-light');
+          light.setAttribute('type', 'point');
+          light.setAttribute('color', '#00ffff');
+          light.setAttribute('intensity', '10');
+          light.setAttribute('distance', '40');
+          dome.appendChild(light);
+
+          this.el.sceneEl.appendChild(dome);
+
+          setTimeout(() => { dome.parentNode.removeChild(dome); }, 500);
+
+          // Pental Dementor menjauh
+          let dir = new THREE.Vector3().subVectors(this.threatPos, rigPos).normalize();
+          dir.y = 0;
+          this.threatPos.addScaledVector(dir, 35); // Terlempar 35m
+          this.el.object3D.position.copy(this.threatPos);
+
+          // Stun Dementor selama 3 detik
+          this.isStunned = true;
+          setTimeout(() => { this.isStunned = false; }, 3000);
         },
         triggerCheckpoint: function() {
           window.isCheckpoint = true;
@@ -475,6 +660,7 @@
           this.el.object3D.lookAt(rigPos);
 
           this.cameraRig.removeAttribute('animation');
+          document.getElementById('shield-btn').style.display = 'none';
           
           let bestTime = localStorage.getItem('lastRobanBestTime') || 0;
           if (window.gameTime > bestTime) {
@@ -500,7 +686,7 @@
             }
           }
 
-          if (!this.active || window.isGameOver || window.isCheckpoint) return;
+          if (!this.active || window.isGameOver || window.isCheckpoint || this.isStunned) return;
 
           let rigPos = this.cameraRig.object3D.position;
           let distToPlayer = this.threatPos.distanceTo(rigPos);
@@ -525,6 +711,7 @@
         const startMenu = document.getElementById('start-menu');
         const restartBtn = document.getElementById('restart-btn');
         const cpResumeBtn = document.getElementById('resume-cp-btn');
+        const shieldBtn = document.getElementById('shield-btn');
         const cpVideo = document.getElementById('cp-video');
         const cpContent = document.getElementById('cp-content');
         let bgmStarted = false;
@@ -554,6 +741,13 @@
           initAudioAndStart();
         });
 
+        shieldBtn.addEventListener('click', () => {
+          const threatEntity = document.querySelector('#threatEntity');
+          if (threatEntity && threatEntity.components['threat-system']) {
+            threatEntity.components['threat-system'].triggerShield();
+          }
+        });
+
         cpResumeBtn.addEventListener('click', () => {
           cpContent.style.display = 'none'; 
           cpVideo.style.display = 'block';  
@@ -579,6 +773,7 @@
           document.getElementById('death-overlay').style.display = 'none';
           window.gameTime = 0;
           window.gameScore = 0;
+          window.shieldCharge = 0;
           window.nextCheckpoint = 120;
           document.getElementById('timer-val').innerText = "0.0";
           document.getElementById('score-val').innerText = "0";
@@ -613,13 +808,14 @@
     </div>
 
     <div id="hud-timer">Time: <span id="timer-val">0.0</span>s</div>
-    <!-- Ubah UI Souls -> Heirlooms -->
     <div id="hud-score">Heirlooms: <span id="score-val">0</span></div>
+
+    <!-- Tombol Aktifkan Electric Blitz Shield -->
+    <button class="btn-glow" id="shield-btn">TRIGGER SHIELD</button>
 
     <div id="checkpoint-overlay">
       <video id="cp-video" src="checkpoint.mp4" playsinline preload="auto" crossorigin="anonymous"></video>
       <div id="cp-content">
-        <!-- Ubah Teks Checkpoint & Tombol -->
         <h2>SEEMS IT'S SAFE FOR A WHILE</h2>
         <button class="btn-glow" id="resume-cp-btn">REST</button>
       </div>
@@ -663,6 +859,7 @@
       <a-plane class="walkable" tap-to-move endless-ground rotation="-90 0 0" width="200" height="200" color="#030808" material="shader: flat"></a-plane>
       <a-entity endless-forest="treeCount: 200; radius: 50"></a-entity>
       <a-entity wisp-system></a-entity>
+      <a-entity apparition-system></a-entity>
     </a-scene>
   </body>
 </html>
