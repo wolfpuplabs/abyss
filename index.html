@@ -177,6 +177,15 @@
       const AudioContext = window.AudioContext || window.webkitAudioContext;
       const audioCtx = new AudioContext();
       
+      // -- GLOBAL AUDIO OBJECTS (Solusi Anti-Block Autoplay iOS) --
+      const sfxHowl = new Audio('ghost%20wishper.mp3'); // Nama file sesuai yang diupload
+      sfxHowl.loop = true;
+      sfxHowl.volume = 0; // Mute dari awal
+      
+      const sfxWalk = new Audio('walk.mp3');
+      sfxWalk.loop = true;
+      sfxWalk.volume = 0; // Mute dari awal
+
       // BGM Ambience
       function playBGM() {
         if(window.bgmOsc) return;
@@ -203,7 +212,7 @@
         window.bgmOsc = whiteNoise;
       }
 
-      // Suara Kematian
+      // Suara Kematian Synth
       function playDeathSound() {
         if (audioCtx.state !== 'running') return;
         const osc = audioCtx.createOscillator();
@@ -242,16 +251,13 @@
               easing: 'linear'
             });
 
-            // Trik Volume Toggling iOS (Mainkan volume, bukan play/pause)
-            const walkAudio = document.getElementById('footstep-sound');
-            if (walkAudio) {
-              walkAudio.volume = 1.0;
-            }
-
+            // Nyalakan Volume SFX Jalan
+            sfxWalk.volume = 1.0;
+            
             if (this.moveTimeout) clearTimeout(this.moveTimeout);
             this.moveTimeout = setTimeout(() => {
-              // Mute suara jalan saat berhenti, jangan di-pause
-              if (walkAudio) walkAudio.volume = 0;
+              // Mute kembali saat animasi jalan selesai (jangan di pause)
+              sfxWalk.volume = 0;
             }, 1000);
           });
         }
@@ -339,11 +345,9 @@
 
           this.cameraRig.removeAttribute('animation');
 
-          // Mute semua suara SFX
-          const howlAudio = document.getElementById('howl-sound');
-          const walkAudio = document.getElementById('footstep-sound');
-          if (howlAudio) howlAudio.volume = 0;
-          if (walkAudio) walkAudio.volume = 0;
+          // Mute suara 
+          sfxHowl.volume = 0;
+          sfxWalk.volume = 0;
 
           const fade = document.getElementById('fade-overlay');
           fade.style.opacity = '1';
@@ -396,11 +400,9 @@
 
           this.cameraRig.removeAttribute('animation');
 
-          // Mute suara saat mati
-          const howlAudio = document.getElementById('howl-sound');
-          const walkAudio = document.getElementById('footstep-sound');
-          if (howlAudio) howlAudio.volume = 0;
-          if (walkAudio) walkAudio.volume = 0;
+          // Mute suara SFX
+          sfxHowl.volume = 0;
+          sfxWalk.volume = 0;
           
           document.getElementById('final-time-val').innerText = window.gameTime.toFixed(1);
           document.getElementById('death-overlay').style.display = 'flex';
@@ -439,43 +441,31 @@
           this.el.object3D.lookAt(rigPos); 
 
           // --- LOGIKA VOLUME HOWL (Ghost Whisper) BERDASARKAN JARAK ---
-          // Audio sebenarnya terus "play" dari awal game, kita hanya memanipulasi volumenya
-          const howlAudio = document.getElementById('howl-sound');
-          if (howlAudio) {
-            if (distToPlayer < 25) {
-              let vol = Math.max(0, 1.0 - (distToPlayer / 25));
-              howlAudio.volume = vol;
-            } else {
-              howlAudio.volume = 0;
-            }
+          // Semakin dekat jarak dementor (< 25 meter), volume whisper makin nyaring
+          if (distToPlayer < 25) {
+            let vol = Math.max(0, 1.0 - (distToPlayer / 25));
+            sfxHowl.volume = vol;
+          } else {
+            sfxHowl.volume = 0;
           }
         }
       });
 
-      // INISIALISASI UI & UNLOCK AUDIO UNTUK IPAD
+      // INISIALISASI UI & FIX AUTOPLAY IPAD/IOS SAFARI
       document.addEventListener('DOMContentLoaded', () => {
         const startBtn = document.getElementById('start-btn');
         const startMenu = document.getElementById('start-menu');
         const restartBtn = document.getElementById('restart-btn');
         const cpResumeBtn = document.getElementById('resume-cp-btn');
-        
-        const howlAudio = document.getElementById('howl-sound');
-        const walkAudio = document.getElementById('footstep-sound');
-        
         let bgmStarted = false;
 
         function initAudioAndStart() {
           if (audioCtx.state === 'suspended') audioCtx.resume();
           
-          // UNLOCK AUDIO: Mainkan langsung dan biarkan looping selamanya, tapi dalam kondisi Mute (Volume 0)
-          if (howlAudio) {
-            howlAudio.volume = 0;
-            howlAudio.play().catch(e => console.log("Unlock Howl Error:", e));
-          }
-          if (walkAudio) {
-            walkAudio.volume = 0;
-            walkAudio.play().catch(e => console.log("Unlock Walk Error:", e));
-          }
+          // --- UNLOCK AUDIO PADA SAAT KLIK PERTAMA ---
+          // Putar audio secara background namun MUTE, mencegah iOS memblokirnya nanti
+          sfxHowl.play().catch(e => console.log("Unlock Howl Error:", e));
+          sfxWalk.play().catch(e => console.log("Unlock Walk Error:", e));
 
           if(!bgmStarted) {
             const buffer = audioCtx.createBuffer(1, 1, 22050);
@@ -559,11 +549,6 @@
       <p id="final-time">You survived for: <span id="final-time-val" style="color: #ff0000; font-weight: bold;">0.0</span>s</p>
       <button class="btn-glow" style="background: #110000;" id="restart-btn">PLAY AGAIN</button>
     </div>
-
-    <!-- ELEMEN AUDIO (Loop Otomatis) -->
-    <!-- Nama file dipastikan sama dengan yang diunggah: ghost wishper.mp3 dan walk.mp3 -->
-    <audio id="howl-sound" src="ghost wishper.mp3" preload="auto" loop crossorigin="anonymous"></audio>
-    <audio id="footstep-sound" src="walk.mp3" preload="auto" loop crossorigin="anonymous"></audio>
 
     <!-- A-Frame Scene -->
     <a-scene fog="type: exponential; color: #071313; density: 0.065" background="color: #071313">
