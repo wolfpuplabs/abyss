@@ -205,53 +205,22 @@
         window.bgmOsc = whiteNoise;
       }
 
-      // -- EERIE / HORROR SCREECH SOUND (Dissonant Vibrato Scream) --
+      // -- Suara Ghostly Howl Baru (Berdasarkan Audio Eksternal) --
       function playScreech(volumeMult) {
-        if (audioCtx.state !== 'running') return;
-        let now = audioCtx.currentTime;
-        let finalVol = Math.max(0.01, volumeMult * 3.5);
-
-        // Dua Oscillator dengan nada sumbang (dissonant tritone)
-        const osc1 = audioCtx.createOscillator();
-        const osc2 = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-
-        osc1.type = 'sawtooth';
-        osc2.type = 'sine';
-
-        // Frekuensi melengking yang menurun drastis seperti jeritan hantu
-        osc1.frequency.setValueAtTime(1400, now);
-        osc1.frequency.exponentialRampToValueAtTime(350, now + 1.2);
-
-        osc2.frequency.setValueAtTime(1475, now); // Detuned pitch untuk efek gelombang mengerikan
-        osc2.frequency.exponentialRampToValueAtTime(370, now + 1.2);
-
-        // LFO Vibrato (Getaran cepat frekuensi)
-        const lfo = audioCtx.createOscillator();
-        const lfoGain = audioCtx.createGain();
-        lfo.frequency.value = 22; // Vibrato horor cepat
-        lfoGain.gain.value = 180;
-        lfo.connect(osc1.frequency);
-        lfo.connect(osc2.frequency);
-        lfo.start(now);
-        lfo.stop(now + 1.2);
-
-        // Gain Envelope
-        gain.gain.setValueAtTime(0, now);
-        gain.gain.linearRampToValueAtTime(finalVol, now + 0.1);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
-
-        osc1.connect(gain);
-        osc2.connect(gain);
-        gain.connect(audioCtx.destination);
-
-        osc1.start(now);
-        osc2.start(now);
-        osc1.stop(now + 1.2);
-        osc2.stop(now + 1.2);
+        const howlAudio = document.getElementById('howl-sound');
+        if (!howlAudio) return;
+        
+        // Clone node agar suara bisa diputar tumpang tindih jika ter-trigger berdekatan
+        let sound = howlAudio.cloneNode();
+        
+        // Atur volume (0.0 sampai 1.0)
+        sound.volume = Math.min(Math.max(volumeMult, 0), 1);
+        
+        // Play audio dan tangkap error agar tidak crash
+        sound.play().catch(e => console.log("Audio play error:", e));
       }
 
-      // Suara Kematian
+      // Suara Kematian (Synth Bass Drop)
       function playDeathSound() {
         if (audioCtx.state !== 'running') return;
         const osc = audioCtx.createOscillator();
@@ -271,7 +240,7 @@
       window.isGameOver = true; 
       window.isCheckpoint = false;
       window.gameTime = 0;
-      window.nextCheckpoint = 120; 
+      window.nextCheckpoint = 120; // Checkpoint di 120 detik
 
       AFRAME.registerComponent('tap-to-move', {
         init: function () {
@@ -382,14 +351,13 @@
             
             cpOverlay.style.display = 'block';
             
-            // Paksa reload buffer video sebelum diputar
             cpVideo.currentTime = 0;
             cpVideo.load();
             
             let playPromise = cpVideo.play();
             if (playPromise !== undefined) {
               playPromise.catch(error => {
-                console.log("Video Autoplay Error:", error);
+                console.log("Video autoplay caught:", error);
               });
             }
             
@@ -467,7 +435,9 @@
           if (this.screechTimer <= 0) {
             let vol = Math.max(0, 1.0 - (distToPlayer / 30));
             playScreech(vol);
-            this.screechTimer = 1200 + (Math.random() * 1000);
+            
+            // Jeda suara diset antara 5 - 8 detik karena audio lumayan panjang
+            this.screechTimer = 5000 + (Math.random() * 3000);
           }
         }
       });
@@ -535,37 +505,48 @@
   </head>
   <body>
     
+    <!-- Fade Overlay -->
     <div id="fade-overlay"></div>
 
+    <!-- UI Menu Awal -->
     <div id="start-menu">
       <div id="start-menu-box">
         <h1>SURVIVE THE LIMBO</h1>
-        <p>Tap the floor to run. Move<br>AWAY from the screeching sound.</p>
+        <p>Tap the floor to run. Move<br>AWAY from the ghostly sound.</p>
         <button class="btn-glow" id="start-btn">ENTER SURVIVAL</button>
       </div>
     </div>
 
+    <!-- HUD Timer Sederhana -->
     <div id="hud-timer">Time: <span id="timer-val">0.0</span>s</div>
 
+    <!-- UI Checkpoint Video Fullscreen -->
     <div id="checkpoint-overlay">
-      <video id="cp-video" src="gemini_generated_video_FA19BD58.mov" loop playsinline muted preload="auto" crossorigin="anonymous"></video>
+      <video id="cp-video" src="checkpoint.mp4" loop playsinline muted preload="auto" crossorigin="anonymous"></video>
       <div id="cp-content">
         <h2>CHECKPOINT REACHED</h2>
         <button class="btn-glow" id="resume-cp-btn">RESUME RUNNING</button>
       </div>
     </div>
 
+    <!-- UI Overlay Kematian -->
     <div id="death-overlay">
       <h1 id="death-text">YOU DIED</h1>
       <p id="final-time">You survived for: <span id="final-time-val" style="color: #ff0000; font-weight: bold;">0.0</span>s</p>
       <button class="btn-glow" style="background: #110000;" id="restart-btn">PLAY AGAIN</button>
     </div>
 
+    <!-- A-Frame Scene -->
     <a-scene fog="type: exponential; color: #071313; density: 0.065" background="color: #071313">
       <a-assets>
+        <!-- Pastikan nama file Anda sudah sesuai dengan ini -->
         <a-asset-item id="dementor-model" src="dementor.glb"></a-asset-item>
+        
+        <!-- AUDIO HOWL DARI REFERENSI ANDA -->
+        <audio id="howl-sound" src="howl.mp3" preload="auto"></audio>
       </a-assets>
 
+      <!-- Player Camera -->
       <a-entity id="cameraRig" position="0 0 0">
         <a-camera position="0 1.6 0" look-controls="pointerLockEnabled: false">
           <a-entity cursor="rayOrigin: mouse;"
@@ -577,6 +558,7 @@
         </a-camera>
       </a-entity>
 
+      <!-- ENTITAS MUSUH: 3D Dementor -->
       <a-entity id="threatEntity" visible="false" threat-system>
         <a-entity animation="property: position; to: 0 0.5 0; dir: alternate; dur: 2200; loop: true; easing: easeInOutSine">
           <a-gltf-model src="#dementor-model" position="0 0 0" scale="4.5 4.5 4.5"></a-gltf-model>
@@ -584,6 +566,7 @@
         </a-entity>
       </a-entity>
 
+      <!-- Lighting Environment Permanen -->
       <a-light type="ambient" color="#1a2525" intensity="0.3"></a-light>
       <a-light type="point" color="#88cccc" intensity="0.4" position="0 15 0" distance="50"></a-light>
 
