@@ -70,7 +70,7 @@
 
       /* HUD Elements */
       #hud-timer {
-        display: none !important; /* Timer Di-hide Sesuai Request */
+        display: none !important;
       }
 
       #hud-score {
@@ -323,7 +323,7 @@
       window.gameScore = 0;
       window.nextCheckpoint = 120; 
 
-      // -- SISTEM STAMINA & GERAKAN -- //
+      // -- SISTEM STAMINA & DOUBLE TAP SPRINT -- //
       window.stamina = 100;
       window.isSprinting = false;
       window.staminaExhausted = false;
@@ -332,16 +332,24 @@
         init: function () {
           this.rig = document.querySelector('#cameraRig');
           this.targetPoint = null;
-
-          // Event hold / tap untuk sprint
-          window.addEventListener('mousedown', () => { if (!window.staminaExhausted) window.isSprinting = true; });
-          window.addEventListener('mouseup', () => { window.isSprinting = false; });
-          window.addEventListener('touchstart', () => { if (!window.staminaExhausted) window.isSprinting = true; });
-          window.addEventListener('touchend', () => { window.isSprinting = false; });
+          this.lastTapTime = 0;
 
           this.el.addEventListener('click', (evt) => {
             if (window.isGameOver || window.isCheckpoint) return; 
             
+            let currentTime = new Date().getTime();
+            let tapLength = currentTime - this.lastTapTime;
+            
+            // Cek jika jarak antar tap kurang dari 300ms (Double Tap)
+            if (tapLength < 300 && tapLength > 0) {
+              if (!window.staminaExhausted && window.stamina > 10) {
+                window.isSprinting = true;
+              }
+            } else {
+              window.isSprinting = false; // Single tap = Jalan biasa
+            }
+            this.lastTapTime = currentTime;
+
             this.targetPoint = evt.detail.intersection.point;
             this.moveToTarget();
           });
@@ -351,7 +359,6 @@
           let currentPos = this.rig.object3D.position;
           let dist = Math.sqrt(Math.pow(this.targetPoint.x - currentPos.x, 2) + Math.pow(this.targetPoint.z - currentPos.z, 2));
           
-          // Kecepatan berdasarkan Sprint
           let speed = (window.isSprinting && !window.staminaExhausted) ? 12 : 6; 
           let duration = (dist / speed) * 1000;
 
@@ -368,19 +375,18 @@
           let deltaSec = timeDelta / 1000;
           let staminaBar = document.getElementById('stamina-bar');
 
-          // Pengurangan dan Regenerasi Stamina
           if (window.isSprinting && !window.staminaExhausted) {
-            window.stamina -= 35 * deltaSec; // Konsumsi stamina saat sprint
+            window.stamina -= 30 * deltaSec; 
             if (this.targetPoint) this.moveToTarget();
 
             if (window.stamina <= 0) {
               window.stamina = 0;
               window.staminaExhausted = true;
               window.isSprinting = false;
-              if (staminaBar) staminaBar.style.background = '#ff0000'; // Merah saat habis
+              if (staminaBar) staminaBar.style.background = '#ff0000';
             }
           } else {
-            window.stamina += 20 * deltaSec; // Regenerasi stamina saat jalan biasa
+            window.stamina += 18 * deltaSec; 
             if (window.stamina >= 100) {
               window.stamina = 100;
               window.staminaExhausted = false;
@@ -439,7 +445,6 @@
         }
       });
 
-      // -- HOLOGRAM NEON HEIRLOOMS SYSTEM -- //
       AFRAME.registerComponent('wisp-system', {
         schema: { count: {type: 'int', default: 3}, radius: {type: 'number', default: 60} }, 
         init: function () {
@@ -449,14 +454,12 @@
           for (let i = 0; i < this.data.count; i++) {
             let wisp = document.createElement('a-entity');
 
-            // Sphere Dalam Hologram Transparan
             let core = document.createElement('a-sphere');
             core.setAttribute('radius', '0.3');
             core.setAttribute('color', '#00ffff');
             core.setAttribute('material', 'shader: flat; transparent: true; opacity: 0.5; wireframe: false');
             wisp.appendChild(core);
 
-            // Ring Hologram Luar (Glow Aura)
             let ring = document.createElement('a-torus');
             ring.setAttribute('radius', '0.5');
             ring.setAttribute('radius-tubular', '0.02');
@@ -466,7 +469,6 @@
             ring.setAttribute('animation', 'property: rotation; to: 405 405 0; loop: true; dur: 3000; easing: linear');
             wisp.appendChild(ring);
             
-            // Point Light Cyan
             let light = document.createElement('a-light');
             light.setAttribute('type', 'point');
             light.setAttribute('color', '#00ffff');
@@ -523,7 +525,6 @@
         }
       });
 
-      // -- SISTEM BAYANGAN TERBANG CEPAT -- //
       AFRAME.registerComponent('apparition-system', {
         init: function () {
           this.cameraRig = document.querySelector('#cameraRig');
@@ -620,7 +621,6 @@
         triggerShield: function () {
           if (window.gameScore < 5 || window.isGameOver || window.isCheckpoint) return;
 
-          // Pengurangan 5 Heirlooms Saat Pakai Shield
           window.gameScore -= 5;
           document.getElementById('score-val').innerText = window.gameScore;
 
@@ -630,7 +630,6 @@
 
           playElectricShieldSFX();
 
-          // Tampilkan Efek Visual Dome Transparan Ledakan Blitz
           let rigPos = this.cameraRig.object3D.position;
           let dome = document.createElement('a-sphere');
           dome.setAttribute('position', `${rigPos.x} 1.6 ${rigPos.z}`);
@@ -651,7 +650,6 @@
 
           setTimeout(() => { dome.parentNode.removeChild(dome); }, 500);
 
-          // Pental Dementor menjauh
           let dir = new THREE.Vector3().subVectors(this.threatPos, rigPos).normalize();
           dir.y = 0;
           this.threatPos.addScaledVector(dir, 35);
@@ -857,14 +855,12 @@
     <div id="start-menu">
       <div id="start-menu-box">
         <h1>SURVIVE THE LIMBO</h1>
-        <p>Tap & Hold to Sprint.<br>Move AWAY from the ghostly sound.</p>
+        <p>Single Tap to Walk.<br>Double Tap to Sprint.<br>Move AWAY from the ghostly sound.</p>
         <button class="btn-glow" id="start-btn">ENTER SURVIVAL</button>
       </div>
     </div>
 
-    <!-- UI Timer disembunyikan Sesuai Request -->
     <div id="hud-timer">Time: <span id="timer-val">0.0</span>s</div>
-    
     <div id="hud-score">Heirlooms: <span id="score-val">0</span></div>
 
     <!-- UI Bar Stamina -->
