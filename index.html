@@ -177,7 +177,7 @@
       const AudioContext = window.AudioContext || window.webkitAudioContext;
       const audioCtx = new AudioContext();
       
-      // BGM Ambience
+      // BGM Ambience (Diperkecil Volumenya)
       function playBGM() {
         if(window.bgmOsc) return;
         const bufferSize = audioCtx.sampleRate * 2; 
@@ -203,15 +203,14 @@
         window.bgmOsc = whiteNoise;
       }
 
-      // -- Suara Langkah Kaki (Menggunakan Audio File Baru) --
+      // -- Suara Langkah Kaki Menggunakan file "walk.mp3" --
       function playFootstep() {
         const footstepAudio = document.getElementById('footstep-sound');
         if (!footstepAudio) return;
         
-        // Gunakan cloneNode agar langkah kaki bisa saling bertumpuk (overlap) secara alami
-        let sound = footstepAudio.cloneNode();
-        sound.volume = 0.7; // Atur volume sesuai selera (0.0 - 1.0)
-        sound.play().catch(e => console.log("Footstep play error:", e));
+        footstepAudio.volume = 1.0;
+        footstepAudio.currentTime = 0; 
+        footstepAudio.play().catch(e => console.log("Footstep play error:", e));
       }
 
       // Suara Kematian
@@ -268,8 +267,7 @@
             this.footstepTimer -= timeDelta;
             if (this.footstepTimer <= 0) {
               playFootstep();
-              // Mengatur seberapa cepat langkah kaki di-trigger (dalam milidetik)
-              this.footstepTimer = 330; 
+              this.footstepTimer = 400; // Trigger "walk.mp3" setiap 400ms saat lari
             }
           } else {
             this.footstepTimer = 0; 
@@ -352,10 +350,6 @@
           
           this.el.object3D.position.copy(this.threatPos);
           this.el.setAttribute('visible', 'true');
-
-          if (this.el.components.sound) {
-            this.el.components.sound.playSound();
-          }
         },
         triggerCheckpoint: function() {
           window.isCheckpoint = true;
@@ -364,6 +358,7 @@
 
           this.cameraRig.removeAttribute('animation');
 
+          // Pause Suara Howl 3D
           if (this.el.components.sound) {
             this.el.components.sound.pauseSound();
           }
@@ -382,9 +377,7 @@
             
             let playPromise = cpVideo.play();
             if (playPromise !== undefined) {
-              playPromise.catch(error => {
-                console.log("Video autoplay caught:", error);
-              });
+              playPromise.catch(error => console.log("Video autoplay caught:", error));
             }
             
             fade.style.opacity = '0';
@@ -408,6 +401,7 @@
             let dir = new THREE.Vector3().subVectors(this.threatPos, rigPos).normalize();
             this.threatPos.addScaledVector(dir, 12); 
 
+            // Play kembali suara Howl
             if (this.el.components.sound) {
               this.el.components.sound.playSound();
             }
@@ -426,6 +420,7 @@
 
           this.cameraRig.removeAttribute('animation');
 
+          // Matikan suara Howl
           if (this.el.components.sound) {
             this.el.components.sound.stopSound();
           }
@@ -468,7 +463,7 @@
         }
       });
 
-      // INISIALISASI UI
+      // INISIALISASI UI & FIX AUTOPLAY IPAD
       document.addEventListener('DOMContentLoaded', () => {
         const startBtn = document.getElementById('start-btn');
         const startMenu = document.getElementById('start-menu');
@@ -476,9 +471,26 @@
         const cpResumeBtn = document.getElementById('resume-cp-btn');
         let bgmStarted = false;
 
-        function initAudioAndStart() {
-          if (audioCtx.state === 'suspended') audioCtx.resume();
+        startBtn.addEventListener('click', () => {
+          startMenu.style.display = 'none';
           
+          if (audioCtx.state === 'suspended') audioCtx.resume();
+
+          // 1. Force Unlock Audio Elements pada saat gesture click pertama kali untuk device Mobile/iPad
+          const howlAudio = document.getElementById('howl-sound');
+          const walkAudio = document.getElementById('footstep-sound');
+          
+          if(howlAudio) {
+            howlAudio.play().catch(()=>{});
+            howlAudio.pause();
+            howlAudio.currentTime = 0;
+          }
+          if(walkAudio) {
+            walkAudio.play().catch(()=>{});
+            walkAudio.pause();
+            walkAudio.currentTime = 0;
+          }
+
           if(!bgmStarted) {
             const buffer = audioCtx.createBuffer(1, 1, 22050);
             const source = audioCtx.createBufferSource();
@@ -487,23 +499,26 @@
             playBGM();
             bgmStarted = true;
           }
-          
-          setTimeout(() => {
-            const threatEntity = document.querySelector('#threatEntity');
-            if (threatEntity && threatEntity.components['threat-system']) {
-              threatEntity.components['threat-system'].startGame();
-            }
-          }, 1000);
-        }
 
-        startBtn.addEventListener('click', () => {
-          startMenu.style.display = 'none';
-          initAudioAndStart();
+          const threatEntity = document.querySelector('#threatEntity');
+          if (threatEntity) {
+            threatEntity.components['threat-system'].startGame();
+            // 2. Play 3D Spatial Sound secara synchronous dalam thread click
+            if (threatEntity.components.sound) {
+              threatEntity.components.sound.playSound();
+            }
+          }
         });
 
         cpResumeBtn.addEventListener('click', () => {
           const threatEntity = document.querySelector('#threatEntity');
-          if (threatEntity) threatEntity.components['threat-system'].resumeFromCheckpoint();
+          if (threatEntity) {
+            threatEntity.components['threat-system'].resumeFromCheckpoint();
+            // 3. Play kembali suara Howl dari jeda video
+            if (threatEntity.components.sound) {
+              threatEntity.components.sound.playSound();
+            }
+          }
         });
 
         restartBtn.addEventListener('click', () => {
@@ -523,13 +538,13 @@
             let angle = Math.random() * Math.PI * 2;
             let dist = 25;
             threatEntity.object3D.position.set(Math.cos(angle) * dist, 1.6, Math.sin(angle) * dist);
-            
+
+            // Restart Howl
             if (threatEntity.components.sound) {
               threatEntity.components.sound.stopSound();
+              threatEntity.components.sound.playSound();
             }
           }
-
-          initAudioAndStart();
         });
       });
     </script>
@@ -573,10 +588,10 @@
         <a-asset-item id="dementor-model" src="dementor.glb"></a-asset-item>
         
         <!-- AUDIO DEMENTOR HOWL -->
-        <audio id="howl-sound" src="ghost wishper.mp3" preload="auto"></audio>
+        <audio id="howl-sound" src="ghost wishper.mp3" preload="auto" crossorigin="anonymous"></audio>
         
-        <!-- AUDIO FOOTSTEP -->
-        <audio id="footstep-sound" src="footstep.mp3" preload="auto"></audio>
+        <!-- AUDIO FOOTSTEP BARU -->
+        <audio id="footstep-sound" src="walk.mp3" preload="auto" crossorigin="anonymous"></audio>
       </a-assets>
 
       <!-- Player Camera -->
@@ -591,8 +606,9 @@
         </a-camera>
       </a-entity>
 
-      <!-- ENTITAS MUSUH: 3D Dementor -->
-      <a-entity id="threatEntity" visible="false" threat-system sound="src: #howl-sound; autoplay: false; loop: true; volume: 6; refDistance: 4; maxDistance: 40; rolloffFactor: 1.5;">
+      <!-- ENTITAS MUSUH: 3D Dementor dengan Spatial Sound 3D -->
+      <!-- 'distanceModel: exponential' = Suara akan perlahan membesar saat Dementor mendekat -->
+      <a-entity id="threatEntity" visible="false" threat-system sound="src: #howl-sound; autoplay: false; loop: true; volume: 8; distanceModel: exponential; refDistance: 3; maxDistance: 40; rolloffFactor: 2.5;">
         <a-entity animation="property: position; to: 0 0.5 0; dir: alternate; dur: 2200; loop: true; easing: easeInOutSine">
           <a-gltf-model src="#dementor-model" position="0 0 0" scale="4.5 4.5 4.5"></a-gltf-model>
           <a-light type="point" color="#ff0000" intensity="2.0" distance="10" position="0 1.5 0.5"></a-light>
