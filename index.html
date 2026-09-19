@@ -67,7 +67,7 @@
         box-shadow: 0 0 25px rgba(255, 0, 0, 0.8), inset 0 0 20px rgba(255, 0, 0, 0.6);
       }
 
-      /* Timer HUD Sederhana */
+      /* Timer HUD */
       #hud-timer {
         display: none;
         position: fixed;
@@ -80,7 +80,7 @@
         text-shadow: 2px 2px 5px #000, 0 0 10px #ff0000;
       }
 
-      /* Black Fade Overlay Transisi */
+      /* Black Fade Overlay */
       #fade-overlay {
         position: fixed;
         top: 0; left: 0; width: 100%; height: 100%;
@@ -91,7 +91,7 @@
         transition: opacity 1s ease;
       }
 
-      /* UI Checkpoint Video Fullscreen & Responsive */
+      /* UI Checkpoint Video Fullscreen */
       #checkpoint-overlay {
         display: none;
         position: fixed;
@@ -177,14 +177,67 @@
       const AudioContext = window.AudioContext || window.webkitAudioContext;
       const audioCtx = new AudioContext();
       
-      // -- GLOBAL AUDIO OBJECTS (Solusi Anti-Block Autoplay iOS) --
-      const sfxHowl = new Audio('ghost%20wishper.mp3'); // Nama file sesuai yang diupload
-      sfxHowl.loop = true;
-      sfxHowl.volume = 0; // Mute dari awal
+      // -- WEB AUDIO API SYSTEM (ANTI-BLOCK IOS) --
+      let howlBuffer = null;
+      let walkBuffer = null;
       
-      const sfxWalk = new Audio('walk.mp3');
-      sfxWalk.loop = true;
-      sfxWalk.volume = 0; // Mute dari awal
+      let howlSource = null;
+      let howlGain = null;
+
+      // Fungsi untuk mengunduh dan men-decode file MP3
+      async function loadAudioFile(url) {
+        try {
+          const response = await fetch(url);
+          const arrayBuffer = await response.arrayBuffer();
+          return await audioCtx.decodeAudioData(arrayBuffer);
+        } catch (e) {
+          console.error("Gagal memuat audio:", url, e);
+          return null;
+        }
+      }
+
+      // Load file saat halaman dibuka[span_0](start_span)[span_0](end_span)[span_1](start_span)[span_1](end_span)
+      loadAudioFile('ghost%20wishper.mp3').then(buffer => howlBuffer = buffer);
+      loadAudioFile('walk.mp3').then(buffer => walkBuffer = buffer);
+
+      // Memulai Looping Suara Howl (Muted pada awalnya)
+      function startHowlLoop() {
+        if (!howlBuffer || howlSource) return;
+        
+        howlSource = audioCtx.createBufferSource();
+        howlSource.buffer = howlBuffer;
+        howlSource.loop = true;
+        
+        howlGain = audioCtx.createGain();
+        howlGain.gain.value = 0; // Mute di awal
+        
+        howlSource.connect(howlGain);
+        howlGain.connect(audioCtx.destination);
+        howlSource.start();
+      }
+
+      // Mengubah volume Howl secara halus berdasarkan jarak
+      function updateHowlVolume(vol) {
+        if (howlGain) {
+          // Set volume dengan transisi halus selama 0.2 detik
+          howlGain.gain.setTargetAtTime(vol, audioCtx.currentTime, 0.2);
+        }
+      }
+
+      // Memutar suara langkah kaki (Sekali jalan per panggilan)
+      function playFootstep() {
+        if (!walkBuffer || audioCtx.state !== 'running') return;
+        
+        const source = audioCtx.createBufferSource();
+        source.buffer = walkBuffer;
+        
+        const gain = audioCtx.createGain();
+        gain.gain.value = 1.5; // Pengaturan keras suara kaki
+        
+        source.connect(gain);
+        gain.connect(audioCtx.destination);
+        source.start();
+      }
 
       // BGM Ambience
       function playBGM() {
@@ -212,7 +265,7 @@
         window.bgmOsc = whiteNoise;
       }
 
-      // Suara Kematian Synth
+      // Suara Kematian
       function playDeathSound() {
         if (audioCtx.state !== 'running') return;
         const osc = audioCtx.createOscillator();
@@ -233,10 +286,12 @@
       window.isCheckpoint = false;
       window.gameTime = 0;
       window.nextCheckpoint = 120; 
+      window.isPlayerMoving = false; 
 
       AFRAME.registerComponent('tap-to-move', {
         init: function () {
           this.rig = document.querySelector('#cameraRig');
+          this.footstepTimer = 0;
           this.moveTimeout = null;
 
           this.el.addEventListener('click', (evt) => {
@@ -251,15 +306,24 @@
               easing: 'linear'
             });
 
-            // Nyalakan Volume SFX Jalan
-            sfxWalk.volume = 1.0;
+            window.isPlayerMoving = true;
             
             if (this.moveTimeout) clearTimeout(this.moveTimeout);
             this.moveTimeout = setTimeout(() => {
-              // Mute kembali saat animasi jalan selesai (jangan di pause)
-              sfxWalk.volume = 0;
+              window.isPlayerMoving = false;
             }, 1000);
           });
+        },
+        tick: function (time, timeDelta) {
+          if (window.isPlayerMoving && !window.isGameOver && !window.isCheckpoint) {
+            this.footstepTimer -= timeDelta;
+            if (this.footstepTimer <= 0) {
+              playFootstep();
+              this.footstepTimer = 400; // Delay tiap langkah kaki
+            }
+          } else {
+            this.footstepTimer = 0; 
+          }
         }
       });
 
@@ -344,10 +408,9 @@
           this.active = false; 
 
           this.cameraRig.removeAttribute('animation');
+          window.isPlayerMoving = false; 
 
-          // Mute suara 
-          sfxHowl.volume = 0;
-          sfxWalk.volume = 0;
+          updateHowlVolume(0); // Mute howl
 
           const fade = document.getElementById('fade-overlay');
           fade.style.opacity = '1';
@@ -359,11 +422,11 @@
             cpOverlay.style.display = 'block';
             
             cpVideo.currentTime = 0;
+            cpVideo.load();
+            
             let playPromise = cpVideo.play();
             if (playPromise !== undefined) {
-              playPromise.catch(error => {
-                console.log("Video autoplay caught:", error);
-              });
+              playPromise.catch(error => console.log("Video autoplay caught:", error));
             }
             
             fade.style.opacity = '0';
@@ -393,6 +456,7 @@
         triggerDeath: function () {
           window.isGameOver = true;
           this.active = false;
+          window.isPlayerMoving = false;
           
           let rigPos = this.cameraRig.object3D.position;
           this.el.object3D.position.set(rigPos.x, rigPos.y + 0.5, rigPos.z - 3.0);
@@ -400,9 +464,7 @@
 
           this.cameraRig.removeAttribute('animation');
 
-          // Mute suara SFX
-          sfxHowl.volume = 0;
-          sfxWalk.volume = 0;
+          updateHowlVolume(0); // Mute howl saat mati
           
           document.getElementById('final-time-val').innerText = window.gameTime.toFixed(1);
           document.getElementById('death-overlay').style.display = 'flex';
@@ -440,18 +502,17 @@
           
           this.el.object3D.lookAt(rigPos); 
 
-          // --- LOGIKA VOLUME HOWL (Ghost Whisper) BERDASARKAN JARAK ---
-          // Semakin dekat jarak dementor (< 25 meter), volume whisper makin nyaring
+          // --- LOGIKA VOLUME HOWL BERDASARKAN JARAK ---
           if (distToPlayer < 25) {
             let vol = Math.max(0, 1.0 - (distToPlayer / 25));
-            sfxHowl.volume = vol;
+            updateHowlVolume(vol * 2.0); // Dikalikan agar suaranya kencang
           } else {
-            sfxHowl.volume = 0;
+            updateHowlVolume(0);
           }
         }
       });
 
-      // INISIALISASI UI & FIX AUTOPLAY IPAD/IOS SAFARI
+      // INISIALISASI UI
       document.addEventListener('DOMContentLoaded', () => {
         const startBtn = document.getElementById('start-btn');
         const startMenu = document.getElementById('start-menu');
@@ -462,10 +523,16 @@
         function initAudioAndStart() {
           if (audioCtx.state === 'suspended') audioCtx.resume();
           
-          // --- UNLOCK AUDIO PADA SAAT KLIK PERTAMA ---
-          // Putar audio secara background namun MUTE, mencegah iOS memblokirnya nanti
-          sfxHowl.play().catch(e => console.log("Unlock Howl Error:", e));
-          sfxWalk.play().catch(e => console.log("Unlock Walk Error:", e));
+          // Mulai play file Buffer Audio (Ini PASTI berhasil di iOS)
+          if (!howlSource) {
+            // Tunggu sebentar memastikan file terload (jika internet lambat)
+            let checkBuffer = setInterval(() => {
+              if (howlBuffer) {
+                startHowlLoop();
+                clearInterval(checkBuffer);
+              }
+            }, 100);
+          }
 
           if(!bgmStarted) {
             const buffer = audioCtx.createBuffer(1, 1, 22050);
@@ -499,6 +566,7 @@
           window.gameTime = 0;
           window.nextCheckpoint = 120;
           document.getElementById('timer-val').innerText = "0.0";
+          window.isPlayerMoving = false;
           
           const camRig = document.querySelector('#cameraRig');
           camRig.removeAttribute('animation');
