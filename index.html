@@ -121,7 +121,7 @@
         justify-content: space-between;
         padding: 50px 20px;
         box-sizing: border-box;
-        background: rgba(0, 0, 0, 0.35); 
+        background: rgba(0, 0, 0, 0.2); 
       }
 
       #cp-content h2 {
@@ -205,18 +205,22 @@
         window.bgmOsc = whiteNoise;
       }
 
-      // -- Suara Ghostly Howl yang Diperbarui --
+      // -- Suara Ghostly Howl Baru (Berdasarkan Audio Eksternal) --
       function playScreech(volumeMult) {
         const howlAudio = document.getElementById('howl-sound');
         if (!howlAudio) return;
         
-        // Memastikan suara langsung reset dan diputar ulang
-        howlAudio.volume = Math.min(Math.max(volumeMult, 0), 1);
-        howlAudio.currentTime = 0; 
-        howlAudio.play().catch(e => console.log("Audio play error:", e));
+        // Clone node agar suara bisa diputar tumpang tindih jika ter-trigger berdekatan
+        let sound = howlAudio.cloneNode();
+        
+        // Atur volume (0.0 sampai 1.0)
+        sound.volume = Math.min(Math.max(volumeMult, 0), 1);
+        
+        // Play audio dan tangkap error agar tidak crash
+        sound.play().catch(e => console.log("Audio play error:", e));
       }
 
-      // Suara Kematian
+      // Suara Kematian (Synth Bass Drop)
       function playDeathSound() {
         if (audioCtx.state !== 'running') return;
         const osc = audioCtx.createOscillator();
@@ -428,14 +432,12 @@
           this.el.object3D.lookAt(rigPos); 
 
           this.screechTimer -= timeDelta;
-          
-          // Suara HANYA keluar jika Dementor mendekat (Jarak < 15 meter)
-          if (distToPlayer < 15 && this.screechTimer <= 0) {
-            let vol = Math.max(0.1, 1.0 - (distToPlayer / 15));
+          if (this.screechTimer <= 0) {
+            let vol = Math.max(0, 1.0 - (distToPlayer / 30));
             playScreech(vol);
             
-            // Jeda 4.5 sampai 6.5 detik sebelum Dementor bisa "melolong" lagi
-            this.screechTimer = 4500 + (Math.random() * 2000);
+            // Jeda suara diset antara 5 - 8 detik karena audio lumayan panjang
+            this.screechTimer = 5000 + (Math.random() * 3000);
           }
         }
       });
@@ -520,7 +522,7 @@
 
     <!-- UI Checkpoint Video Fullscreen -->
     <div id="checkpoint-overlay">
-      <video id="cp-video" src="gemini_generated_video_FA19BD58.mov" loop playsinline muted preload="auto" crossorigin="anonymous"></video>
+      <video id="cp-video" src="checkpoint.mp4" loop playsinline muted preload="auto" crossorigin="anonymous"></video>
       <div id="cp-content">
         <h2>CHECKPOINT REACHED</h2>
         <button class="btn-glow" id="resume-cp-btn">RESUME RUNNING</button>
@@ -537,10 +539,11 @@
     <!-- A-Frame Scene -->
     <a-scene fog="type: exponential; color: #071313; density: 0.065" background="color: #071313">
       <a-assets>
+        <!-- Pastikan nama file Anda sudah sesuai dengan ini -->
         <a-asset-item id="dementor-model" src="dementor.glb"></a-asset-item>
         
         <!-- AUDIO HOWL DARI REFERENSI ANDA -->
-        <audio id="howl-sound" src="ghost wishper.mp3" preload="auto"></audio>
+        <audio id="howl-sound" src="howl.mp3" preload="auto"></audio>
       </a-assets>
 
       <!-- Player Camera -->
