@@ -307,9 +307,10 @@
           let angle = Math.random() * Math.PI * 2;
           let dist = 25;
           
+          // Posisi di Y=2.0 agar basis floating-nya lebih tinggi
           this.threatPos.set(
             rigPos.x + Math.cos(angle) * dist,
-            1.5, 
+            2.0, 
             rigPos.z + Math.sin(angle) * dist
           );
           
@@ -346,9 +347,9 @@
           window.isGameOver = true;
           this.active = false;
           
-          // Letakkan Dementor di depan muka
+          // Letakkan Dementor pas di depan kamera (Z dikurangi agar model besar ini tidak tembus kamera)
           let rigPos = this.cameraRig.object3D.position;
-          this.el.object3D.position.set(rigPos.x, rigPos.y + 1.2, rigPos.z - 1.5);
+          this.el.object3D.position.set(rigPos.x, rigPos.y + 0.5, rigPos.z - 2.5);
           this.el.object3D.lookAt(rigPos);
 
           this.cameraRig.removeAttribute('animation');
@@ -378,8 +379,8 @@
           let rigPos = this.cameraRig.object3D.position;
           let distToPlayer = this.threatPos.distanceTo(rigPos);
 
-          // Hitbox Dementor
-          if (distToPlayer < 3.0) {
+          // Hitbox Dementor (jarak tabrakan agak diperbesar karena modelnya sekarang besar)
+          if (distToPlayer < 3.5) {
             this.triggerDeath();
             return;
           }
@@ -469,10 +470,9 @@
   </head>
   <body>
     
-    <!-- A-Frame Assets (Taruh file lokal di sini) -->
+    <!-- A-Frame Assets -->
     <a-scene fog="type: exponential; color: #071313; density: 0.065" background="color: #071313">
       <a-assets>
-        <!-- Load Model Dementor -->
         <a-asset-item id="dementor-model" src="dementor.glb"></a-asset-item>
       </a-assets>
 
@@ -491,7 +491,6 @@
       <!-- UI Checkpoint Video Overlay -->
       <div id="checkpoint-overlay">
         <h2>CHECKPOINT REACHED</h2>
-        <!-- Video Loop Checkpoint -->
         <video id="cp-video" src="checkpoint.mp4" loop playsinline crossorigin="anonymous"></video>
         <p style="color:#aaa; font-family:monospace; margin-bottom: 20px;">Prepare for the next 120 seconds...</p>
         <button class="btn-glow" id="resume-cp-btn">RESUME RUNNING</button>
@@ -518,14 +517,15 @@
 
       <!-- ENTITAS MUSUH: 3D Dementor -->
       <a-entity id="threatEntity" visible="false" threat-system>
-        <!-- Wrapper animasi melayang (floating) -->
-        <a-entity animation="property: position; to: 0 0.5 0; dir: alternate; dur: 2000; loop: true; easing: easeInOutSine">
+        
+        <!-- Wrapper animasi melayang. Diubah position `to` nya agar melayang lebih stabil di udara -->
+        <a-entity animation="property: position; to: 0 0.8 0; dir: alternate; dur: 2000; loop: true; easing: easeInOutSine">
           
-          <!-- Model Dementor GLTF -->
-          <a-gltf-model src="#dementor-model" position="0 -1.5 0" scale="1.2 1.2 1.2"></a-gltf-model>
+          <!-- Model Dementor GLTF. Skala diperbesar menjadi 4.5 dan sumbu Y digeser naik agar sejajar mata -->
+          <a-gltf-model src="#dementor-model" position="0 0.5 0" scale="4.5 4.5 4.5"></a-gltf-model>
           
-          <!-- Efek mata / aura merah di dalam jubah Dementor -->
-          <a-light type="point" color="#ff0000" intensity="1.5" distance="6" position="0 1.5 0.5"></a-light>
+          <!-- Efek mata / aura merah di dalam jubah -->
+          <a-light type="point" color="#ff0000" intensity="1.5" distance="6" position="0 2.0 0.5"></a-light>
           
         </a-entity>
       </a-entity>
