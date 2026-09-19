@@ -8,7 +8,7 @@
     <style>
       body, html { margin: 0; padding: 0; overflow: hidden; background-color: #000; }
       
-      /* UI Start Menu (Sesuai Referensi Gambar) */
+      /* UI Start Menu */
       #start-menu {
         position: absolute;
         top: 0; left: 0; width: 100%; height: 100%;
@@ -80,6 +80,33 @@
         text-shadow: 2px 2px 5px #000, 0 0 10px #ff0000;
       }
 
+      /* UI Checkpoint Video */
+      #checkpoint-overlay {
+        display: none;
+        position: absolute;
+        top: 0; left: 0; width: 100%; height: 100%;
+        background: #000;
+        z-index: 10001;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+      }
+
+      #checkpoint-overlay h2 {
+        color: #44ff44;
+        font-family: 'Courier New', monospace;
+        text-shadow: 0 0 10px #00ff00;
+        margin-bottom: 20px;
+      }
+
+      #cp-video {
+        border: 2px solid #333;
+        box-shadow: 0 0 30px rgba(255,255,255,0.2);
+        max-width: 80%;
+        max-height: 60%;
+        margin-bottom: 20px;
+      }
+
       /* Layar Sudden Death */
       #death-overlay {
         display: none;
@@ -128,6 +155,7 @@
       
       // BGM Ambience
       function playBGM() {
+        if(window.bgmOsc) return;
         const bufferSize = audioCtx.sampleRate * 2; 
         const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
         const output = noiseBuffer.getChannelData(0);
@@ -148,6 +176,7 @@
         filter.connect(whisperGain);
         whisperGain.connect(audioCtx.destination);
         whiteNoise.start(); 
+        window.bgmOsc = whiteNoise;
       }
 
       // Suara Lengkingan
@@ -155,18 +184,14 @@
         if (audioCtx.state !== 'running') return;
         const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
-        
         osc.type = 'sawtooth';
         osc.frequency.setValueAtTime(800, audioCtx.currentTime);
         osc.frequency.exponentialRampToValueAtTime(2500, audioCtx.currentTime + 0.3);
         osc.frequency.exponentialRampToValueAtTime(1000, audioCtx.currentTime + 0.6);
-        
         let finalVol = Math.max(0.01, volumeMult * 4); 
-        
         gain.gain.setValueAtTime(0, audioCtx.currentTime);
         gain.gain.linearRampToValueAtTime(finalVol, audioCtx.currentTime + 0.1);
         gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.8);
-        
         osc.connect(gain);
         gain.connect(audioCtx.destination);
         osc.start(); 
@@ -178,14 +203,11 @@
         if (audioCtx.state !== 'running') return;
         const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
-        
         osc.type = 'square';
         osc.frequency.setValueAtTime(150, audioCtx.currentTime);
         osc.frequency.exponentialRampToValueAtTime(10, audioCtx.currentTime + 0.5);
-        
         gain.gain.setValueAtTime(4, audioCtx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 1.5);
-        
         osc.connect(gain);
         gain.connect(audioCtx.destination);
         osc.start(); 
@@ -195,14 +217,15 @@
 
       // -- SISTEM KONTROL & GAMEPLAY -- //
       window.isGameOver = true; 
-      window.gameStartTime = 0;
-      window.timerInterval = null;
+      window.isCheckpoint = false;
+      window.gameTime = 0;
+      window.nextCheckpoint = 120; // Checkpoint pertama di 120 detik
 
       AFRAME.registerComponent('tap-to-move', {
         init: function () {
           this.rig = document.querySelector('#cameraRig');
           this.el.addEventListener('click', (evt) => {
-            if (window.isGameOver) return; 
+            if (window.isGameOver || window.isCheckpoint) return; 
             
             var point = evt.detail.intersection.point;
             this.rig.setAttribute('animation', {
@@ -262,73 +285,106 @@
         }
       });
 
-      // -- SISTEM SUDDEN DEATH (SKULL ENEMY) -- //
+      // -- SISTEM DEMENTOR & CHECKPOINT -- //
       AFRAME.registerComponent('threat-system', {
         init: function () {
           this.cameraRig = document.querySelector('#cameraRig');
           this.active = false;
-          this.speed = 5.0; 
+          this.baseSpeed = 4.5;
+          this.speed = this.baseSpeed; 
           this.screechTimer = 0;
           this.threatPos = new THREE.Vector3();
         },
         startGame: function () {
           this.active = true;
           window.isGameOver = false;
+          window.isCheckpoint = false;
           
-          // Memulai Timer
-          window.gameStartTime = Date.now();
           document.getElementById('hud-timer').style.display = 'block';
-          if(window.timerInterval) clearInterval(window.timerInterval);
-          window.timerInterval = setInterval(() => {
-            if(!window.isGameOver) {
-              let elapsed = (Date.now() - window.gameStartTime) / 1000;
-              document.getElementById('timer-val').innerText = elapsed.toFixed(1);
-            }
-          }, 100);
 
-          // Spawn musuh (jarak 20 meter, posisi acak melingkar)
+          // Spawn musuh (jarak 25 meter)
           let rigPos = this.cameraRig.object3D.position;
           let angle = Math.random() * Math.PI * 2;
-          let dist = 20;
+          let dist = 25;
           
           this.threatPos.set(
             rigPos.x + Math.cos(angle) * dist,
-            1.6, 
+            1.5, 
             rigPos.z + Math.sin(angle) * dist
           );
           
           this.el.object3D.position.copy(this.threatPos);
           this.el.setAttribute('visible', 'true');
         },
+        triggerCheckpoint: function() {
+          window.isCheckpoint = true;
+          this.active = false; // Pause Dementor
+
+          // Hentikan pergerakan player
+          this.cameraRig.removeAttribute('animation');
+
+          // Tampilkan Overlay Video
+          const cpOverlay = document.getElementById('checkpoint-overlay');
+          const cpVideo = document.getElementById('cp-video');
+          cpOverlay.style.display = 'flex';
+          cpVideo.currentTime = 0;
+          cpVideo.play();
+          
+          // Tingkatkan kesulitan untuk 120s berikutnya
+          this.speed += 0.5; 
+        },
+        resumeFromCheckpoint: function() {
+          window.isCheckpoint = false;
+          this.active = true;
+          
+          // Jauhkan dementor sedikit agar player punya waktu bernapas
+          let rigPos = this.cameraRig.object3D.position;
+          let dir = new THREE.Vector3().subVectors(this.threatPos, rigPos).normalize();
+          this.threatPos.addScaledVector(dir, 10); // Mundur 10 meter
+        },
         triggerDeath: function () {
           window.isGameOver = true;
           this.active = false;
-          clearInterval(window.timerInterval);
           
-          // Letakkan tengkorak di depan muka
+          // Letakkan Dementor di depan muka
           let rigPos = this.cameraRig.object3D.position;
-          this.el.object3D.position.set(rigPos.x, rigPos.y + 1.5, rigPos.z - 1.2);
-          
+          this.el.object3D.position.set(rigPos.x, rigPos.y + 1.2, rigPos.z - 1.5);
+          this.el.object3D.lookAt(rigPos);
+
           this.cameraRig.removeAttribute('animation');
           
           // Tampilkan layer kematian
-          let elapsed = (Date.now() - window.gameStartTime) / 1000;
-          document.getElementById('final-time-val').innerText = elapsed.toFixed(1);
+          document.getElementById('final-time-val').innerText = window.gameTime.toFixed(1);
           document.getElementById('death-overlay').style.display = 'flex';
           
           playDeathSound();
         },
         tick: function (time, timeDelta) {
-          if (!this.active || window.isGameOver) return;
+          // Timer Logic (Hanya jalan jika tidak mati & tidak di checkpoint)
+          if (!window.isGameOver && !window.isCheckpoint) {
+            window.gameTime += (timeDelta / 1000);
+            document.getElementById('timer-val').innerText = window.gameTime.toFixed(1);
+
+            // Cek Checkpoint setiap kelipatan 120 detik
+            if (window.gameTime >= window.nextCheckpoint) {
+              window.nextCheckpoint += 120;
+              this.triggerCheckpoint();
+              return;
+            }
+          }
+
+          if (!this.active || window.isGameOver || window.isCheckpoint) return;
 
           let rigPos = this.cameraRig.object3D.position;
           let distToPlayer = this.threatPos.distanceTo(rigPos);
 
-          if (distToPlayer < 3.5) {
+          // Hitbox Dementor
+          if (distToPlayer < 3.0) {
             this.triggerDeath();
             return;
           }
 
+          // Dementor Mengejar
           let dir = new THREE.Vector3().subVectors(rigPos, this.threatPos).normalize();
           dir.y = 0; 
           
@@ -336,6 +392,7 @@
           this.threatPos.addScaledVector(dir, moveDist);
           this.el.object3D.position.copy(this.threatPos);
           
+          // Dementor selalu menatap player
           this.el.object3D.lookAt(rigPos); 
 
           this.screechTimer -= timeDelta;
@@ -352,6 +409,9 @@
         const startBtn = document.getElementById('start-btn');
         const startMenu = document.getElementById('start-menu');
         const restartBtn = document.getElementById('restart-btn');
+        const cpResumeBtn = document.getElementById('resume-cp-btn');
+        const cpVideo = document.getElementById('cp-video');
+        
         let bgmStarted = false;
 
         function initAudioAndStart() {
@@ -374,21 +434,34 @@
           }, 1000);
         }
 
-        // Tombol Start Menu
+        // Tombol Start
         startBtn.addEventListener('click', () => {
           startMenu.style.display = 'none';
           initAudioAndStart();
         });
 
+        // Tombol Lanjut dari Checkpoint
+        cpResumeBtn.addEventListener('click', () => {
+          document.getElementById('checkpoint-overlay').style.display = 'none';
+          cpVideo.pause();
+          const threatEntity = document.querySelector('#threatEntity');
+          if (threatEntity) threatEntity.components['threat-system'].resumeFromCheckpoint();
+        });
+
         // Tombol Play Again
         restartBtn.addEventListener('click', () => {
           document.getElementById('death-overlay').style.display = 'none';
+          window.gameTime = 0;
+          window.nextCheckpoint = 120;
           document.getElementById('timer-val').innerText = "0.0";
           
           const camRig = document.querySelector('#cameraRig');
           camRig.removeAttribute('animation');
           camRig.object3D.position.set(0, 0, 0);
           
+          const threatEntity = document.querySelector('#threatEntity');
+          if (threatEntity) threatEntity.components['threat-system'].speed = threatEntity.components['threat-system'].baseSpeed;
+
           initAudioAndStart();
         });
       });
@@ -396,65 +469,72 @@
   </head>
   <body>
     
-    <!-- UI Menu Awal -->
-    <div id="start-menu">
-      <div id="start-menu-box">
-        <h1>A LAST ROBAN</h1>
-        <p>Tap the floor to run. Move<br>AWAY from the screeching sound.</p>
-        <button class="btn-glow" id="start-btn">ENTER</button>
-      </div>
-    </div>
-
-    <!-- HUD Timer saat Game Berjalan -->
-    <div id="hud-timer">Time: <span id="timer-val">0.0</span>s</div>
-
-    <!-- UI Overlay Darah Kematian -->
-    <div id="death-overlay">
-      <h1 id="death-text">YOU DIED</h1>
-      <p id="final-time">You survived for: <span id="final-time-val" style="color: #ff0000; font-weight: bold;">0.0</span>s</p>
-      <button class="btn-glow" style="background: #110000;" id="restart-btn">PLAY AGAIN</button>
-    </div>
-
+    <!-- A-Frame Assets (Taruh file lokal di sini) -->
     <a-scene fog="type: exponential; color: #071313; density: 0.065" background="color: #071313">
+      <a-assets>
+        <!-- Load Model Dementor -->
+        <a-asset-item id="dementor-model" src="dementor.glb"></a-asset-item>
+      </a-assets>
 
+      <!-- UI Menu Awal -->
+      <div id="start-menu">
+        <div id="start-menu-box">
+          <h1>SURVIVE THE LIMBO</h1>
+          <p>Tap the floor to run. Move<br>AWAY from the screeching sound.</p>
+          <button class="btn-glow" id="start-btn">ENTER SURVIVAL</button>
+        </div>
+      </div>
+
+      <!-- HUD Timer -->
+      <div id="hud-timer">Time: <span id="timer-val">0.0</span>s</div>
+
+      <!-- UI Checkpoint Video Overlay -->
+      <div id="checkpoint-overlay">
+        <h2>CHECKPOINT REACHED</h2>
+        <!-- Video Loop Checkpoint -->
+        <video id="cp-video" src="checkpoint.mp4" loop playsinline crossorigin="anonymous"></video>
+        <p style="color:#aaa; font-family:monospace; margin-bottom: 20px;">Prepare for the next 120 seconds...</p>
+        <button class="btn-glow" id="resume-cp-btn">RESUME RUNNING</button>
+      </div>
+
+      <!-- UI Overlay Darah Kematian -->
+      <div id="death-overlay">
+        <h1 id="death-text">YOU DIED</h1>
+        <p id="final-time">You survived for: <span id="final-time-val" style="color: #ff0000; font-weight: bold;">0.0</span>s</p>
+        <button class="btn-glow" style="background: #110000;" id="restart-btn">PLAY AGAIN</button>
+      </div>
+
+      <!-- Player Camera -->
       <a-entity id="cameraRig" position="0 0 0">
         <a-camera position="0 1.6 0" look-controls="pointerLockEnabled: false">
-          
           <a-entity cursor="rayOrigin: mouse;"
                     raycaster="objects: .walkable"
                     position="0 0 -1"
                     geometry="primitive: ring; radiusInner: 0.015; radiusOuter: 0.025"
                     material="color: #ffffff; shader: flat; opacity: 0.4">
           </a-entity>
-          
         </a-camera>
       </a-entity>
 
-      <!-- ENTITAS MUSUH PENGEJAR: 3D Low Poly Red Skull -->
+      <!-- ENTITAS MUSUH: 3D Dementor -->
       <a-entity id="threatEntity" visible="false" threat-system>
-        <a-entity animation="property: position; to: 0 0.3 0; dir: alternate; dur: 1200; loop: true; easing: easeInOutSine">
+        <!-- Wrapper animasi melayang (floating) -->
+        <a-entity animation="property: position; to: 0 0.5 0; dir: alternate; dur: 2000; loop: true; easing: easeInOutSine">
           
-          <a-icosahedron radius="0.6" color="#ff0000" material="flatShading: true; roughness: 1; emissive: #330000; emissiveIntensity: 0.5"></a-icosahedron>
-          <a-box width="0.75" height="0.4" depth="0.5" position="0 -0.4 0.2" color="#dd0000" material="flatShading: true; roughness: 1; emissive: #220000"></a-box>
-          <a-box width="0.5" height="0.3" depth="0.4" position="0 -0.7 0.25" color="#aa0000" material="flatShading: true; roughness: 1"></a-box>
-          <a-icosahedron radius="0.18" position="-0.25 -0.1 0.52" color="#000" material="flatShading: true"></a-icosahedron>
-          <a-icosahedron radius="0.18" position="0.25 -0.1 0.52" color="#000" material="flatShading: true"></a-icosahedron>
-          <a-tetrahedron radius="0.12" position="0 -0.35 0.55" rotation="35 0 0" color="#000" material="flatShading: true"></a-tetrahedron>
+          <!-- Model Dementor GLTF -->
+          <a-gltf-model src="#dementor-model" position="0 -1.5 0" scale="1.2 1.2 1.2"></a-gltf-model>
           
-          <a-box width="0.05" height="0.2" depth="0.1" position="-0.15 -0.55 0.48" color="#000"></a-box>
-          <a-box width="0.05" height="0.2" depth="0.1" position="0 -0.55 0.5" color="#000"></a-box>
-          <a-box width="0.05" height="0.2" depth="0.1" position="0.15 -0.55 0.48" color="#000"></a-box>
-
-          <a-light type="point" color="#ff0000" intensity="1.5" distance="6" position="0 0 0.5"></a-light>
+          <!-- Efek mata / aura merah di dalam jubah Dementor -->
+          <a-light type="point" color="#ff0000" intensity="1.5" distance="6" position="0 1.5 0.5"></a-light>
           
         </a-entity>
       </a-entity>
 
+      <!-- Environment -->
       <a-light type="ambient" color="#1a2525"></a-light>
       <a-light type="point" color="#88cccc" intensity="0.4" position="0 15 0" distance="50"></a-light>
 
       <a-plane class="walkable" tap-to-move endless-ground rotation="-90 0 0" width="200" height="200" color="#030808" material="shader: flat"></a-plane>
-      
       <a-entity endless-forest="treeCount: 200; radius: 50"></a-entity>
 
     </a-scene>
