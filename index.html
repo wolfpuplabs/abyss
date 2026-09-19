@@ -106,7 +106,7 @@
         position: absolute;
         top: 0; left: 0;
         width: 100%; height: 100%;
-        object-fit: cover; /* Membuat video memenuhi layar tanpa gepeng */
+        object-fit: cover;
         z-index: 1;
       }
 
@@ -121,7 +121,7 @@
         justify-content: space-between;
         padding: 50px 20px;
         box-sizing: border-box;
-        background: rgba(0, 0, 0, 0.35); /* Tint hitam tipis agar teks dan tombol terlihat jelas */
+        background: rgba(0, 0, 0, 0.35); 
       }
 
       #cp-content h2 {
@@ -240,7 +240,6 @@
         osc.stop(audioCtx.currentTime + 2);
       }
 
-
       // -- SISTEM KONTROL & GAMEPLAY -- //
       window.isGameOver = true; 
       window.isCheckpoint = false;
@@ -328,14 +327,14 @@
           
           document.getElementById('hud-timer').style.display = 'block';
 
-          // Spawn Dementor terbang di udara (Y = 4.5)
+          // Spawn Dementor. Diubah ke Y=1.6 agar lurus dengan mata pemain
           let rigPos = this.cameraRig.object3D.position;
           let angle = Math.random() * Math.PI * 2;
           let dist = 25;
           
           this.threatPos.set(
             rigPos.x + Math.cos(angle) * dist,
-            4.5, 
+            1.6, 
             rigPos.z + Math.sin(angle) * dist
           );
           
@@ -394,8 +393,9 @@
           window.isGameOver = true;
           this.active = false;
           
+          // Letakkan Dementor lurus di depan kamera dan atur jarak Z
           let rigPos = this.cameraRig.object3D.position;
-          this.el.object3D.position.set(rigPos.x, rigPos.y + 2.5, rigPos.z - 3.0);
+          this.el.object3D.position.set(rigPos.x, rigPos.y + 0.5, rigPos.z - 3.0);
           this.el.object3D.lookAt(rigPos);
 
           this.cameraRig.removeAttribute('animation');
@@ -496,7 +496,13 @@
           camRig.object3D.position.set(0, 0, 0);
           
           const threatEntity = document.querySelector('#threatEntity');
-          if (threatEntity) threatEntity.components['threat-system'].speed = threatEntity.components['threat-system'].baseSpeed;
+          if (threatEntity) {
+            threatEntity.components['threat-system'].speed = threatEntity.components['threat-system'].baseSpeed;
+            // Kembalikan ke posisi awal saat re-start
+            let angle = Math.random() * Math.PI * 2;
+            let dist = 25;
+            threatEntity.object3D.position.set(Math.cos(angle) * dist, 1.6, Math.sin(angle) * dist);
+          }
 
           initAudioAndStart();
         });
@@ -505,8 +511,10 @@
   </head>
   <body>
     
+    <!-- Fade Overlay -->
     <div id="fade-overlay"></div>
 
+    <!-- UI Menu Awal -->
     <div id="start-menu">
       <div id="start-menu-box">
         <h1>SURVIVE THE LIMBO</h1>
@@ -515,8 +523,10 @@
       </div>
     </div>
 
+    <!-- HUD Timer Sederhana -->
     <div id="hud-timer">Time: <span id="timer-val">0.0</span>s</div>
 
+    <!-- UI Checkpoint Video Fullscreen -->
     <div id="checkpoint-overlay">
       <video id="cp-video" src="gemini_generated_video_FA19BD58.mov" loop playsinline muted autoplay crossorigin="anonymous"></video>
       <div id="cp-content">
@@ -525,17 +535,20 @@
       </div>
     </div>
 
+    <!-- UI Overlay Kematian -->
     <div id="death-overlay">
       <h1 id="death-text">YOU DIED</h1>
       <p id="final-time">You survived for: <span id="final-time-val" style="color: #ff0000; font-weight: bold;">0.0</span>s</p>
       <button class="btn-glow" style="background: #110000;" id="restart-btn">PLAY AGAIN</button>
     </div>
 
+    <!-- A-Frame Scene -->
     <a-scene fog="type: exponential; color: #071313; density: 0.065" background="color: #071313">
       <a-assets>
         <a-asset-item id="dementor-model" src="dementor.glb"></a-asset-item>
       </a-assets>
 
+      <!-- Player Camera -->
       <a-entity id="cameraRig" position="0 0 0">
         <a-camera position="0 1.6 0" look-controls="pointerLockEnabled: false">
           <a-entity cursor="rayOrigin: mouse;"
@@ -547,13 +560,20 @@
         </a-camera>
       </a-entity>
 
+      <!-- ENTITAS MUSUH: 3D Dementor -->
       <a-entity id="threatEntity" visible="false" threat-system>
-        <a-entity animation="property: position; to: 0 1.0 0; dir: alternate; dur: 2200; loop: true; easing: easeInOutSine">
-          <a-gltf-model src="#dementor-model" position="0 1.8 0" scale="4.5 4.5 4.5"></a-gltf-model>
-          <a-light type="point" color="#ff0000" intensity="2.0" distance="10" position="0 3.0 0.5"></a-light>
+        <!-- Animasi float ringan (naik-turun max 0.5 meter) agar gerakannya lebih alami -->
+        <a-entity animation="property: position; to: 0 0.5 0; dir: alternate; dur: 2200; loop: true; easing: easeInOutSine">
+          
+          <!-- Posisi model dikembalikan ke '0 0 0' dengan scale 4.5 supaya berada sejajar mata -->
+          <a-gltf-model src="#dementor-model" position="0 0 0" scale="4.5 4.5 4.5"></a-gltf-model>
+          
+          <a-light type="point" color="#ff0000" intensity="2.0" distance="10" position="0 1.5 0.5"></a-light>
+          
         </a-entity>
       </a-entity>
 
+      <!-- Lighting Environment (Suasana Malam Permanen) -->
       <a-light type="ambient" color="#1a2525" intensity="0.3"></a-light>
       <a-light type="point" color="#88cccc" intensity="0.4" position="0 15 0" distance="50"></a-light>
 
