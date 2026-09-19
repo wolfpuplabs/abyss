@@ -81,6 +81,18 @@
         text-shadow: 2px 2px 5px #000, 0 0 10px #ff0000;
       }
 
+      /* Score HUD Sederhana */
+      #hud-score {
+        display: none;
+        position: absolute;
+        top: 20px; right: 20px;
+        color: #44aaff;
+        font-family: monospace;
+        font-size: 20px;
+        z-index: 9998;
+        text-shadow: 2px 2px 5px #000, 0 0 10px #0055ff;
+      }
+
       /* Black Fade Overlay Transisi */
       #fade-overlay {
         position: absolute;
@@ -110,7 +122,7 @@
         width: 100%; height: 100%;
         object-fit: cover;
         z-index: 1;
-        display: none; /* Disembunyikan sampai tombol di klik */
+        display: none;
       }
 
       #cp-content {
@@ -121,8 +133,8 @@
         display: flex;
         flex-direction: column;
         align-items: center;
-        justify-content: center; /* Diubah agar ke tengah */
-        gap: 50px; /* Jarak antara teks dan tombol */
+        justify-content: center;
+        gap: 50px;
         padding: 20px;
         box-sizing: border-box;
         background: rgba(0, 0, 0, 0.9); 
@@ -176,8 +188,16 @@
         font-family: monospace;
         font-size: 2vw;
         margin-top: 10px;
-        margin-bottom: 40px;
+        margin-bottom: 20px;
         text-shadow: 2px 2px 5px #000;
+      }
+
+      #best-time {
+        color: #ffd700;
+        font-family: monospace;
+        font-size: 1.5vw;
+        margin-top: 0px;
+        margin-bottom: 40px;
       }
     </style>
 
@@ -185,7 +205,6 @@
       const AudioContext = window.AudioContext || window.webkitAudioContext;
       const audioCtx = new AudioContext();
       
-      // BGM Ambience
       function playBGM() {
         if(window.bgmOsc) return;
         const bufferSize = audioCtx.sampleRate * 2; 
@@ -226,11 +245,11 @@
         osc.stop(audioCtx.currentTime + 2);
       }
 
-      // -- SISTEM KONTROL & GAMEPLAY -- //
       window.isGameOver = true; 
       window.isCheckpoint = false;
       window.gameTime = 0;
-      window.nextCheckpoint = 120; // Checkpoint di 120 detik
+      window.gameScore = 0;
+      window.nextCheckpoint = 120; 
 
       AFRAME.registerComponent('tap-to-move', {
         init: function () {
@@ -296,7 +315,78 @@
         }
       });
 
-      // -- SISTEM DEMENTOR & CHECKPOINT -- //
+      AFRAME.registerComponent('wisp-system', {
+        schema: { count: {type: 'int', default: 15}, radius: {type: 'number', default: 40} },
+        init: function () {
+          this.wisps = [];
+          this.cameraRig = document.querySelector('#cameraRig');
+          this.threat = document.querySelector('#threatEntity');
+          
+          for (let i = 0; i < this.data.count; i++) {
+            let wisp = document.createElement('a-sphere');
+            wisp.setAttribute('radius', '0.3');
+            wisp.setAttribute('color', '#44aaff');
+            wisp.setAttribute('material', 'shader: flat; transparent: true; opacity: 0.8');
+            
+            let light = document.createElement('a-light');
+            light.setAttribute('type', 'point');
+            light.setAttribute('color', '#44aaff');
+            light.setAttribute('intensity', '1');
+            light.setAttribute('distance', '3');
+            wisp.appendChild(light);
+
+            this.repositionWisp(wisp);
+            this.el.sceneEl.appendChild(wisp);
+            this.wisps.push(wisp);
+          }
+        },
+        tick: function () {
+          if (window.isGameOver || window.isCheckpoint) return;
+          
+          let camPos = this.cameraRig.object3D.position;
+          
+          for (let wisp of this.wisps) {
+            let wispPos = wisp.object3D.position;
+            let dist = camPos.distanceTo(wispPos);
+            
+            if (dist < 2.0) {
+              window.gameScore += 1;
+              document.getElementById('score-val').innerText = window.gameScore;
+              
+              this.repositionWisp(wisp);
+              
+              if (this.threat && this.threat.components['threat-system']) {
+                 let sys = this.threat.components['threat-system'];
+                 let currentSpeed = sys.speed;
+                 sys.speed = Math.max(sys.baseSpeed - 2, 1); 
+                 setTimeout(() => { sys.speed = sys.baseSpeed; }, 3000);
+              }
+            }
+            else if (dist > this.data.radius + 10) {
+              this.repositionWisp(wisp);
+            }
+          }
+        },
+        repositionWisp: function (wisp) {
+          let camPos = this.cameraRig.object3D.position;
+          let angle = (Math.random() * Math.PI) - (Math.PI / 2); 
+          let dist = 15 + Math.random() * (this.data.radius - 15);
+          
+          let tx = camPos.x + Math.cos(angle) * dist;
+          let tz = camPos.z + Math.sin(angle) * dist;
+          
+          wisp.object3D.position.set(tx, 1.2, tz);
+          wisp.setAttribute('animation', {
+            property: 'position',
+            to: `${tx} 1.8 ${tz}`,
+            dir: 'alternate',
+            dur: 1500,
+            loop: true,
+            easing: 'easeInOutSine'
+          });
+        }
+      });
+
       AFRAME.registerComponent('threat-system', {
         init: function () {
           this.cameraRig = document.querySelector('#cameraRig');
@@ -311,6 +401,7 @@
           window.isCheckpoint = false;
           
           document.getElementById('hud-timer').style.display = 'block';
+          document.getElementById('hud-score').style.display = 'block';
 
           let rigPos = this.cameraRig.object3D.position;
           let angle = Math.random() * Math.PI * 2;
@@ -343,8 +434,8 @@
             const cpVideo = document.getElementById('cp-video');
             
             cpOverlay.style.display = 'block';
-            cpContent.style.display = 'flex'; // Tampilkan tombol
-            cpVideo.style.display = 'none';   // Sembunyikan video dulu
+            cpContent.style.display = 'flex'; 
+            cpVideo.style.display = 'none';   
             
             fade.style.opacity = '0';
           }, 1000);
@@ -385,7 +476,14 @@
 
           this.cameraRig.removeAttribute('animation');
           
+          let bestTime = localStorage.getItem('lastRobanBestTime') || 0;
+          if (window.gameTime > bestTime) {
+            bestTime = window.gameTime;
+            localStorage.setItem('lastRobanBestTime', bestTime);
+          }
+          
           document.getElementById('final-time-val').innerText = window.gameTime.toFixed(1);
+          document.getElementById('best-time-val').innerText = parseFloat(bestTime).toFixed(1);
           document.getElementById('death-overlay').style.display = 'flex';
           
           playDeathSound();
@@ -422,7 +520,6 @@
         }
       });
 
-      // INISIALISASI UI
       document.addEventListener('DOMContentLoaded', () => {
         const startBtn = document.getElementById('start-btn');
         const startMenu = document.getElementById('start-menu');
@@ -457,23 +554,20 @@
           initAudioAndStart();
         });
 
-        // Event saat tombol Checkpoint diklik: Putar Video
         cpResumeBtn.addEventListener('click', () => {
-          cpContent.style.display = 'none'; // Sembunyikan UI tombol & teks
-          cpVideo.style.display = 'block';  // Tampilkan canvas video
+          cpContent.style.display = 'none'; 
+          cpVideo.style.display = 'block';  
           
           cpVideo.currentTime = 0;
           cpVideo.muted = false; 
           
           cpVideo.play().catch(error => {
             console.log("Video gagal diputar:", error);
-            // Fallback: Jika video tetap error, langsung resume game saja
             const threatEntity = document.querySelector('#threatEntity');
             if (threatEntity) threatEntity.components['threat-system'].resumeFromCheckpoint();
           });
         });
 
-        // Resume otomatis ketika video checkpoint selesai
         cpVideo.addEventListener('ended', () => {
           const threatEntity = document.querySelector('#threatEntity');
           if (threatEntity && window.isCheckpoint) {
@@ -484,8 +578,10 @@
         restartBtn.addEventListener('click', () => {
           document.getElementById('death-overlay').style.display = 'none';
           window.gameTime = 0;
+          window.gameScore = 0;
           window.nextCheckpoint = 120;
           document.getElementById('timer-val').innerText = "0.0";
+          document.getElementById('score-val').innerText = "0";
           
           const camRig = document.querySelector('#cameraRig');
           camRig.removeAttribute('animation');
@@ -517,19 +613,20 @@
     </div>
 
     <div id="hud-timer">Time: <span id="timer-val">0.0</span>s</div>
+    <div id="hud-score">Souls: <span id="score-val">0</span></div>
 
     <div id="checkpoint-overlay">
       <video id="cp-video" src="checkpoint.mp4" playsinline preload="auto" crossorigin="anonymous"></video>
       <div id="cp-content">
         <h2>CHECKPOINT REACHED</h2>
-        <!-- Teks tombol diubah agar jelas fungsinya memutar memori/video -->
         <button class="btn-glow" id="resume-cp-btn">PLAY VIDEO</button>
       </div>
     </div>
 
     <div id="death-overlay">
       <h1 id="death-text">YOU DIED</h1>
-      <p id="final-time">You survived for: <span id="final-time-val" style="color: #ff0000; font-weight: bold;">0.0</span>s</p>
+      <p id="final-time">Time: <span id="final-time-val" style="color: #ff0000; font-weight: bold;">0.0</span>s</p>
+      <p id="best-time">Best Time: <span id="best-time-val">0.0</span>s</p>
       <button class="btn-glow" style="background: #110000;" id="restart-btn">PLAY AGAIN</button>
     </div>
 
@@ -563,6 +660,7 @@
 
       <a-plane class="walkable" tap-to-move endless-ground rotation="-90 0 0" width="200" height="200" color="#030808" material="shader: flat"></a-plane>
       <a-entity endless-forest="treeCount: 200; radius: 50"></a-entity>
+      <a-entity wisp-system></a-entity>
     </a-scene>
   </body>
 </html>
