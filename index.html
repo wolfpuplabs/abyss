@@ -10,7 +10,7 @@
       
       /* UI Start Menu */
       #start-menu {
-        position: fixed;
+        position: absolute;
         top: 0; left: 0; width: 100%; height: 100%;
         background: transparent;
         display: flex;
@@ -67,10 +67,10 @@
         box-shadow: 0 0 25px rgba(255, 0, 0, 0.8), inset 0 0 20px rgba(255, 0, 0, 0.6);
       }
 
-      /* Timer HUD */
+      /* Timer HUD Sederhana */
       #hud-timer {
         display: none;
-        position: fixed;
+        position: absolute;
         top: 20px; left: 50%;
         transform: translateX(-50%);
         color: #fff;
@@ -80,9 +80,9 @@
         text-shadow: 2px 2px 5px #000, 0 0 10px #ff0000;
       }
 
-      /* Black Fade Overlay */
+      /* Black Fade Overlay Transisi */
       #fade-overlay {
-        position: fixed;
+        position: absolute;
         top: 0; left: 0; width: 100%; height: 100%;
         background: #000;
         z-index: 10000;
@@ -94,47 +94,49 @@
       /* UI Checkpoint Video Fullscreen */
       #checkpoint-overlay {
         display: none;
-        position: fixed;
+        position: absolute;
         top: 0; left: 0; 
         width: 100vw; height: 100vh;
         background: #000;
         z-index: 10001;
+        overflow: hidden;
       }
 
       #cp-video {
         position: absolute;
         top: 0; left: 0;
         width: 100%; height: 100%;
-        object-fit: cover; 
+        object-fit: cover;
         z-index: 1;
       }
 
       #cp-content {
-        position: relative;
+        position: absolute;
+        top: 0; left: 0;
         width: 100%; height: 100%;
         z-index: 2;
         display: flex;
         flex-direction: column;
         align-items: center;
-        justify-content: center; 
-        gap: 40px;
-        background: rgba(0, 0, 0, 0.4); 
+        justify-content: space-between;
+        padding: 50px 20px;
+        box-sizing: border-box;
+        background: rgba(0, 0, 0, 0.35); 
       }
 
       #cp-content h2 {
         color: #ffaa44;
         font-family: 'Courier New', monospace;
         text-shadow: 0 0 20px #ff6600, 0 0 10px #000;
-        font-size: 32px;
+        font-size: 36px;
         margin: 0;
         letter-spacing: 3px;
-        text-align: center;
       }
 
       /* Layar Death Overlay */
       #death-overlay {
         display: none;
-        position: fixed;
+        position: absolute;
         top: 0; left: 0; width: 100%; height: 100%;
         z-index: 9999;
         flex-direction: column;
@@ -177,68 +179,6 @@
       const AudioContext = window.AudioContext || window.webkitAudioContext;
       const audioCtx = new AudioContext();
       
-      // -- WEB AUDIO API SYSTEM (ANTI-BLOCK IOS) --
-      let howlBuffer = null;
-      let walkBuffer = null;
-      
-      let howlSource = null;
-      let howlGain = null;
-
-      // Fungsi untuk mengunduh dan men-decode file MP3
-      async function loadAudioFile(url) {
-        try {
-          const response = await fetch(url);
-          const arrayBuffer = await response.arrayBuffer();
-          return await audioCtx.decodeAudioData(arrayBuffer);
-        } catch (e) {
-          console.error("Gagal memuat audio:", url, e);
-          return null;
-        }
-      }
-
-      // Load file saat halaman dibuka[span_0](start_span)[span_0](end_span)[span_1](start_span)[span_1](end_span)
-      loadAudioFile('ghost%20wishper.mp3').then(buffer => howlBuffer = buffer);
-      loadAudioFile('walk.mp3').then(buffer => walkBuffer = buffer);
-
-      // Memulai Looping Suara Howl (Muted pada awalnya)
-      function startHowlLoop() {
-        if (!howlBuffer || howlSource) return;
-        
-        howlSource = audioCtx.createBufferSource();
-        howlSource.buffer = howlBuffer;
-        howlSource.loop = true;
-        
-        howlGain = audioCtx.createGain();
-        howlGain.gain.value = 0; // Mute di awal
-        
-        howlSource.connect(howlGain);
-        howlGain.connect(audioCtx.destination);
-        howlSource.start();
-      }
-
-      // Mengubah volume Howl secara halus berdasarkan jarak
-      function updateHowlVolume(vol) {
-        if (howlGain) {
-          // Set volume dengan transisi halus selama 0.2 detik
-          howlGain.gain.setTargetAtTime(vol, audioCtx.currentTime, 0.2);
-        }
-      }
-
-      // Memutar suara langkah kaki (Sekali jalan per panggilan)
-      function playFootstep() {
-        if (!walkBuffer || audioCtx.state !== 'running') return;
-        
-        const source = audioCtx.createBufferSource();
-        source.buffer = walkBuffer;
-        
-        const gain = audioCtx.createGain();
-        gain.gain.value = 1.5; // Pengaturan keras suara kaki
-        
-        source.connect(gain);
-        gain.connect(audioCtx.destination);
-        source.start();
-      }
-
       // BGM Ambience
       function playBGM() {
         if(window.bgmOsc) return;
@@ -256,13 +196,24 @@
         filter.frequency.value = 400; 
 
         const whisperGain = audioCtx.createGain();
-        whisperGain.gain.value = 0.05; 
+        whisperGain.gain.value = 0.2; 
 
         whiteNoise.connect(filter);
         filter.connect(whisperGain);
         whisperGain.connect(audioCtx.destination);
         whiteNoise.start(); 
         window.bgmOsc = whiteNoise;
+      }
+
+      // -- Suara Ghostly Howl yang Diperbarui --
+      function playScreech(volumeMult) {
+        const howlAudio = document.getElementById('howl-sound');
+        if (!howlAudio) return;
+        
+        // Memastikan suara langsung reset dan diputar ulang
+        howlAudio.volume = Math.min(Math.max(volumeMult, 0), 1);
+        howlAudio.currentTime = 0; 
+        howlAudio.play().catch(e => console.log("Audio play error:", e));
       }
 
       // Suara Kematian
@@ -285,45 +236,22 @@
       window.isGameOver = true; 
       window.isCheckpoint = false;
       window.gameTime = 0;
-      window.nextCheckpoint = 120; 
-      window.isPlayerMoving = false; 
+      window.nextCheckpoint = 120; // Checkpoint di 120 detik
 
       AFRAME.registerComponent('tap-to-move', {
         init: function () {
           this.rig = document.querySelector('#cameraRig');
-          this.footstepTimer = 0;
-          this.moveTimeout = null;
-
           this.el.addEventListener('click', (evt) => {
             if (window.isGameOver || window.isCheckpoint) return; 
             
             var point = evt.detail.intersection.point;
-            
             this.rig.setAttribute('animation', {
               property: 'position',
               to: point.x + ' 0 ' + point.z,
               dur: 1000, 
               easing: 'linear'
             });
-
-            window.isPlayerMoving = true;
-            
-            if (this.moveTimeout) clearTimeout(this.moveTimeout);
-            this.moveTimeout = setTimeout(() => {
-              window.isPlayerMoving = false;
-            }, 1000);
           });
-        },
-        tick: function (time, timeDelta) {
-          if (window.isPlayerMoving && !window.isGameOver && !window.isCheckpoint) {
-            this.footstepTimer -= timeDelta;
-            if (this.footstepTimer <= 0) {
-              playFootstep();
-              this.footstepTimer = 400; // Delay tiap langkah kaki
-            }
-          } else {
-            this.footstepTimer = 0; 
-          }
         }
       });
 
@@ -381,6 +309,7 @@
           this.active = false;
           this.baseSpeed = 4.5;
           this.speed = this.baseSpeed; 
+          this.screechTimer = 0;
           this.threatPos = new THREE.Vector3();
         },
         startGame: function () {
@@ -408,9 +337,6 @@
           this.active = false; 
 
           this.cameraRig.removeAttribute('animation');
-          window.isPlayerMoving = false; 
-
-          updateHowlVolume(0); // Mute howl
 
           const fade = document.getElementById('fade-overlay');
           fade.style.opacity = '1';
@@ -426,7 +352,9 @@
             
             let playPromise = cpVideo.play();
             if (playPromise !== undefined) {
-              playPromise.catch(error => console.log("Video autoplay caught:", error));
+              playPromise.catch(error => {
+                console.log("Video autoplay caught:", error);
+              });
             }
             
             fade.style.opacity = '0';
@@ -456,15 +384,12 @@
         triggerDeath: function () {
           window.isGameOver = true;
           this.active = false;
-          window.isPlayerMoving = false;
           
           let rigPos = this.cameraRig.object3D.position;
           this.el.object3D.position.set(rigPos.x, rigPos.y + 0.5, rigPos.z - 3.0);
           this.el.object3D.lookAt(rigPos);
 
           this.cameraRig.removeAttribute('animation');
-
-          updateHowlVolume(0); // Mute howl saat mati
           
           document.getElementById('final-time-val').innerText = window.gameTime.toFixed(1);
           document.getElementById('death-overlay').style.display = 'flex';
@@ -502,12 +427,15 @@
           
           this.el.object3D.lookAt(rigPos); 
 
-          // --- LOGIKA VOLUME HOWL BERDASARKAN JARAK ---
-          if (distToPlayer < 25) {
-            let vol = Math.max(0, 1.0 - (distToPlayer / 25));
-            updateHowlVolume(vol * 2.0); // Dikalikan agar suaranya kencang
-          } else {
-            updateHowlVolume(0);
+          this.screechTimer -= timeDelta;
+          
+          // Suara HANYA keluar jika Dementor mendekat (Jarak < 15 meter)
+          if (distToPlayer < 15 && this.screechTimer <= 0) {
+            let vol = Math.max(0.1, 1.0 - (distToPlayer / 15));
+            playScreech(vol);
+            
+            // Jeda 4.5 sampai 6.5 detik sebelum Dementor bisa "melolong" lagi
+            this.screechTimer = 4500 + (Math.random() * 2000);
           }
         }
       });
@@ -523,17 +451,6 @@
         function initAudioAndStart() {
           if (audioCtx.state === 'suspended') audioCtx.resume();
           
-          // Mulai play file Buffer Audio (Ini PASTI berhasil di iOS)
-          if (!howlSource) {
-            // Tunggu sebentar memastikan file terload (jika internet lambat)
-            let checkBuffer = setInterval(() => {
-              if (howlBuffer) {
-                startHowlLoop();
-                clearInterval(checkBuffer);
-              }
-            }, 100);
-          }
-
           if(!bgmStarted) {
             const buffer = audioCtx.createBuffer(1, 1, 22050);
             const source = audioCtx.createBufferSource();
@@ -548,7 +465,7 @@
             if (threatEntity && threatEntity.components['threat-system']) {
               threatEntity.components['threat-system'].startGame();
             }
-          }, 500);
+          }, 1000);
         }
 
         startBtn.addEventListener('click', () => {
@@ -566,7 +483,6 @@
           window.gameTime = 0;
           window.nextCheckpoint = 120;
           document.getElementById('timer-val').innerText = "0.0";
-          window.isPlayerMoving = false;
           
           const camRig = document.querySelector('#cameraRig');
           camRig.removeAttribute('animation');
@@ -604,7 +520,7 @@
 
     <!-- UI Checkpoint Video Fullscreen -->
     <div id="checkpoint-overlay">
-      <video id="cp-video" src="gemini_generated_video_FA19BD58.mov" playsinline muted preload="auto" crossorigin="anonymous"></video>
+      <video id="cp-video" src="gemini_generated_video_FA19BD58.mov" loop playsinline muted preload="auto" crossorigin="anonymous"></video>
       <div id="cp-content">
         <h2>CHECKPOINT REACHED</h2>
         <button class="btn-glow" id="resume-cp-btn">RESUME RUNNING</button>
@@ -622,6 +538,9 @@
     <a-scene fog="type: exponential; color: #071313; density: 0.065" background="color: #071313">
       <a-assets>
         <a-asset-item id="dementor-model" src="dementor.glb"></a-asset-item>
+        
+        <!-- AUDIO HOWL DARI REFERENSI ANDA -->
+        <audio id="howl-sound" src="ghost wishper.mp3" preload="auto"></audio>
       </a-assets>
 
       <!-- Player Camera -->
