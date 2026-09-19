@@ -105,7 +105,7 @@
         position: absolute;
         top: 0; left: 0;
         width: 100%; height: 100%;
-        object-fit: cover; /* Pastikan video full-screen di semua orientasi HP/Tablet */
+        object-fit: cover; 
         z-index: 1;
       }
 
@@ -116,9 +116,9 @@
         display: flex;
         flex-direction: column;
         align-items: center;
-        justify-content: center; /* Pastikan selalu di tengah layar */
+        justify-content: center; 
         gap: 40px;
-        background: rgba(0, 0, 0, 0.4); /* Efek gelap agar teks terbaca */
+        background: rgba(0, 0, 0, 0.4); 
       }
 
       #cp-content h2 {
@@ -194,7 +194,7 @@
         filter.frequency.value = 400; 
 
         const whisperGain = audioCtx.createGain();
-        whisperGain.gain.value = 0.05; // Volume BGM sangat kecil
+        whisperGain.gain.value = 0.05; 
 
         whiteNoise.connect(filter);
         filter.connect(whisperGain);
@@ -203,29 +203,15 @@
         window.bgmOsc = whiteNoise;
       }
 
-      // Suara Langkah Kaki (Footsteps)
+      // -- Suara Langkah Kaki (Menggunakan Audio File Baru) --
       function playFootstep() {
-        if (audioCtx.state !== 'running') return;
-        const bufferSize = audioCtx.sampleRate * 0.15; 
-        const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-        const output = noiseBuffer.getChannelData(0);
-        for (let i = 0; i < bufferSize; i++) { output[i] = Math.random() * 2 - 1; }
-
-        const noiseSource = audioCtx.createBufferSource();
-        noiseSource.buffer = noiseBuffer;
-
-        const filter = audioCtx.createBiquadFilter();
-        filter.type = 'bandpass';
-        filter.frequency.value = 900; 
-
-        const gain = audioCtx.createGain();
-        gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
-
-        noiseSource.connect(filter);
-        filter.connect(gain);
-        gain.connect(audioCtx.destination);
-        noiseSource.start();
+        const footstepAudio = document.getElementById('footstep-sound');
+        if (!footstepAudio) return;
+        
+        // Gunakan cloneNode agar langkah kaki bisa saling bertumpuk (overlap) secara alami
+        let sound = footstepAudio.cloneNode();
+        sound.volume = 0.7; // Atur volume sesuai selera (0.0 - 1.0)
+        sound.play().catch(e => console.log("Footstep play error:", e));
       }
 
       // Suara Kematian
@@ -270,6 +256,7 @@
             });
 
             window.isPlayerMoving = true;
+            
             if (this.moveTimeout) clearTimeout(this.moveTimeout);
             this.moveTimeout = setTimeout(() => {
               window.isPlayerMoving = false;
@@ -281,6 +268,7 @@
             this.footstepTimer -= timeDelta;
             if (this.footstepTimer <= 0) {
               playFootstep();
+              // Mengatur seberapa cepat langkah kaki di-trigger (dalam milidetik)
               this.footstepTimer = 330; 
             }
           } else {
@@ -365,7 +353,6 @@
           this.el.object3D.position.copy(this.threatPos);
           this.el.setAttribute('visible', 'true');
 
-          // Mulai play suara Howl (loop) saat game mulai
           if (this.el.components.sound) {
             this.el.components.sound.playSound();
           }
@@ -377,7 +364,6 @@
 
           this.cameraRig.removeAttribute('animation');
 
-          // Hentikan suara Howl
           if (this.el.components.sound) {
             this.el.components.sound.pauseSound();
           }
@@ -396,7 +382,9 @@
             
             let playPromise = cpVideo.play();
             if (playPromise !== undefined) {
-              playPromise.catch(error => console.log("Video autoplay caught:", error));
+              playPromise.catch(error => {
+                console.log("Video autoplay caught:", error);
+              });
             }
             
             fade.style.opacity = '0';
@@ -420,7 +408,6 @@
             let dir = new THREE.Vector3().subVectors(this.threatPos, rigPos).normalize();
             this.threatPos.addScaledVector(dir, 12); 
 
-            // Putar kembali suara Howl (loop)
             if (this.el.components.sound) {
               this.el.components.sound.playSound();
             }
@@ -439,7 +426,6 @@
 
           this.cameraRig.removeAttribute('animation');
 
-          // Hentikan suara Howl
           if (this.el.components.sound) {
             this.el.components.sound.stopSound();
           }
@@ -538,7 +524,6 @@
             let dist = 25;
             threatEntity.object3D.position.set(Math.cos(angle) * dist, 1.6, Math.sin(angle) * dist);
             
-            // Restart audio
             if (threatEntity.components.sound) {
               threatEntity.components.sound.stopSound();
             }
@@ -568,7 +553,6 @@
 
     <!-- UI Checkpoint Video Fullscreen -->
     <div id="checkpoint-overlay">
-      <!-- Tanpa atribut loop -->
       <video id="cp-video" src="gemini_generated_video_FA19BD58.mov" playsinline muted preload="auto" crossorigin="anonymous"></video>
       <div id="cp-content">
         <h2>CHECKPOINT REACHED</h2>
@@ -587,7 +571,12 @@
     <a-scene fog="type: exponential; color: #071313; density: 0.065" background="color: #071313">
       <a-assets>
         <a-asset-item id="dementor-model" src="dementor.glb"></a-asset-item>
+        
+        <!-- AUDIO DEMENTOR HOWL -->
         <audio id="howl-sound" src="ghost wishper.mp3" preload="auto"></audio>
+        
+        <!-- AUDIO FOOTSTEP -->
+        <audio id="footstep-sound" src="footstep.mp3" preload="auto"></audio>
       </a-assets>
 
       <!-- Player Camera -->
@@ -602,7 +591,7 @@
         </a-camera>
       </a-entity>
 
-      <!-- ENTITAS MUSUH: 3D Dementor dengan Spatial Sound Looping -->
+      <!-- ENTITAS MUSUH: 3D Dementor -->
       <a-entity id="threatEntity" visible="false" threat-system sound="src: #howl-sound; autoplay: false; loop: true; volume: 6; refDistance: 4; maxDistance: 40; rolloffFactor: 1.5;">
         <a-entity animation="property: position; to: 0 0.5 0; dir: alternate; dur: 2200; loop: true; easing: easeInOutSine">
           <a-gltf-model src="#dementor-model" position="0 0 0" scale="4.5 4.5 4.5"></a-gltf-model>
